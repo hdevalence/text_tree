@@ -1,15 +1,18 @@
 use std::collections::HashSet;
 
+#[derive(Debug)]
 pub struct Node {
     pub(super) children: Vec<Node>,
     pub(super) node_data: NodeData,
 }
 
+#[derive(Debug)]
 pub enum NodeData {
     Text(String),
     Element(ElementData),
 }
 
+#[derive(Debug)]
 pub struct ElementData {
     //pub(super) node_type: Option<String>,
     pub(super) id: Option<String>,

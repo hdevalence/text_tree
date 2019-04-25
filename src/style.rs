@@ -20,13 +20,23 @@ pub struct Declaration {
     pub(super) value: Value,
 }
 
-#[derive(Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
     Keyword(String),
     // An absolute length, in characters.
-    AbsoluteLength(u32),
+    AbsoluteLength(i32),
     // A relative length, between 0 and 1.
-    RelativeLength(f32),
+    //RelativeLength(f32),
+}
+
+impl Value {
+    pub fn to_chars(&self) -> i32 {
+        match self {
+            // XXX handle relative lengths?
+            Value::AbsoluteLength(l) => *l,
+            _ => 0,
+        }
+    }
 }
 
 pub type Specificity = (usize, usize, usize);
@@ -75,7 +85,6 @@ impl Stylesheet {
             .filter_map(|rule| rule.match_rule(element))
             .collect()
     }
-
 }
 
 #[cfg(test)]

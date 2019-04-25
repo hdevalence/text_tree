@@ -5,6 +5,7 @@ use super::style::*;
 
 type PropertyMap = HashMap<String, Value>;
 
+#[derive(Debug)]
 pub struct StyledNode<'a> {
     pub(super) node: &'a Node,
     pub(super) specified_values: PropertyMap,
@@ -48,13 +49,25 @@ pub enum Display {
 
 impl<'a> StyledNode<'a> {
     pub fn display(&self) -> Display {
-        match self.specified_values.get("display") {
+        match self.value("display") {
             Some(Value::Keyword(s)) => match s.as_str() {
                 "block" => Display::Block,
                 "none" => Display::None,
                 _ => Display::Inline,
             },
-            _ => Display::Inline,
+            _ => Display::Block,
         }
+    }
+
+    pub fn value(&self, keyword: &str) -> Option<Value> {
+        self.specified_values.get(keyword).map(|v| v.clone())
+    }
+
+    pub fn lookup(&self, keyword: &str, shorthand: &str, default: &Value) -> Value {
+        self.specified_values
+            .get(keyword)
+            .or_else(|| self.specified_values.get(shorthand))
+            .map(|v| v.clone())
+            .unwrap_or(default.clone())
     }
 }
