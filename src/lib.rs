@@ -80,12 +80,12 @@ mod tests {
                             value: Value::AbsoluteLength(2),
                         },
                         Declaration {
-                            name: "border".to_string(),
-                            value: Value::AbsoluteLength(2),
+                            name: "border-width".to_string(),
+                            value: Value::AbsoluteLength(1),
                         },
                         Declaration {
                             name: "height".to_string(),
-                            value: Value::AbsoluteLength(8),
+                            value: Value::AbsoluteLength(4),
                         },
                     ],
                 },
@@ -129,6 +129,26 @@ mod tests {
                             name: "margin-left".to_string(),
                             value: Value::AbsoluteLength(6),
                         },
+                        Declaration {
+                            name: "margin-bottom".to_string(),
+                            value: Value::AbsoluteLength(2),
+                        },
+                        Declaration {
+                            name: "border-left-width".to_string(),
+                            value: Value::AbsoluteLength(2),
+                        },
+                        Declaration {
+                            name: "border-right-width".to_string(),
+                            value: Value::AbsoluteLength(2),
+                        },
+                        Declaration {
+                            name: "border-top-width".to_string(),
+                            value: Value::AbsoluteLength(1),
+                        },
+                        Declaration {
+                            name: "border-bottom-width".to_string(),
+                            value: Value::AbsoluteLength(1),
+                        },
                     ],
                 },
             ],
@@ -170,7 +190,7 @@ mod tests {
         //println!("{:?}", layout_root.dimensions);
         print_boxes(&layout_root, 0);
 
-        let mut c = DebugCanvas::new(80, 20);
+        let mut c = DebugCanvas::new(80, 25);
 
         c.paint(&build_display_list(&layout_root));
 

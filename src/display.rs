@@ -96,12 +96,16 @@ impl DebugCanvas {
                 }
             }
             DisplayCommand::BorderBox(rect, edges) => {
+                println!("rect, edges: {:?}, {:?}", rect, edges);
                 use std::cmp::{min, max};
                 let x0 = self.clamp_x(rect.x);
                 let x1 = self.clamp_x(rect.x + rect.width);
                 let y0 = self.clamp_y(rect.y);
                 let y1 = self.clamp_y(rect.y + rect.height);
+                // is the border inside or outside the content?
+                /* inside
                 // top border
+                println!("y = {}..{}", y0, min(y0 + edges.top, y1));
                 for y in y0..min(y0 + edges.top, y1) {
                     for x in (x0..x1) {
                         self.data[y as usize][x as usize] = '-';
@@ -121,6 +125,31 @@ impl DebugCanvas {
                 }
                 // left border
                 for x in x0..min(x0 + edges.left, x1) {
+                    for y in (y0..y1) {
+                        self.data[y as usize][x as usize] = '|';
+                    }
+                }
+                */
+                // top border
+                for y in (y0-edges.top)..y0 {
+                    for x in (x0..x1) {
+                        self.data[y as usize][x as usize] = '-';
+                    }
+                }
+                // right border
+                for x in x1..(x1+edges.right) {
+                    for y in (y0..y1) {
+                        self.data[y as usize][x as usize] = '|';
+                    }
+                }
+                // bottom border
+                for y in y1..(y1+edges.bottom) {
+                    for x in (x0..x1) {
+                        self.data[y as usize][x as usize] = '-';
+                    }
+                }
+                // left border
+                for x in (x0-edges.left)..x0 {
                     for y in (y0..y1) {
                         self.data[y as usize][x as usize] = '|';
                     }
