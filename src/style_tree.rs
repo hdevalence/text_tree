@@ -49,13 +49,23 @@ pub enum Display {
 
 impl<'a> StyledNode<'a> {
     pub fn display(&self) -> Display {
+        println!("display value {:?}", self.value("display"));
         match self.value("display") {
             Some(Value::Keyword(s)) => match s.as_str() {
-                "block" => Display::Block,
-                "none" => Display::None,
-                _ => Display::Inline,
+                "block" => {
+                    println!("found block");
+                    Display::Block
+                }
+                "none" => {
+                    println!("found none");
+                    Display::None
+                }
+                _ => {
+                    println!("setting inline");
+                    Display::Inline
+                }
             },
-            _ => Display::Block,
+            _ => Display::Inline,
         }
     }
 

@@ -9,6 +9,7 @@ pub struct Rule {
     pub(super) declarations: Vec<Declaration>,
 }
 
+#[derive(Debug)]
 pub struct Selector {
     //node_type: Option<String>,
     pub(super) id: Option<String>,
@@ -51,7 +52,9 @@ impl Selector {
     }
 
     pub fn matches(&self, element: &ElementData) -> bool {
+        println!("checking if {:?} matches {:?}", self, element);
         if self.id.iter().any(|id| element.id != Some(id.to_string())) {
+            println!("id does not match");
             return false;
         }
 
@@ -60,9 +63,11 @@ impl Selector {
             .iter()
             .any(|class| !element.classes.contains(class))
         {
+            println!("class does not match");
             return false;
         }
 
+        println!("matches");
         true
     }
 }

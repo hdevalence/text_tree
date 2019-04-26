@@ -1,4 +1,5 @@
 pub mod content_tree;
+pub mod display;
 pub mod layout;
 pub mod style;
 pub mod style_tree;
@@ -8,12 +9,13 @@ mod tests {
     use std::collections::HashSet;
 
     use super::content_tree::*;
+    use super::display::*;
     use super::layout::*;
     use super::style::*;
     use super::style_tree::*;
 
     #[test]
-    fn build_tree() {
+    fn build_and_style_and_layout_and_paint_dom() {
         let root = Node::new(
             vec![
                 Node::new(
@@ -22,7 +24,7 @@ mod tests {
                         Node::from("more text".to_string()),
                     ],
                     None,
-                    ["a"].iter().map(|s| s.to_string()).collect(),
+                    ["a", "block"].iter().map(|s| s.to_string()).collect(),
                 ),
                 Node::new(
                     vec![
@@ -30,11 +32,19 @@ mod tests {
                         Node::from("more text".to_string()),
                     ],
                     None,
-                    ["b"].iter().map(|s| s.to_string()).collect(),
+                    ["b", "block"].iter().map(|s| s.to_string()).collect(),
+                ),
+                Node::new(
+                    vec![
+                        Node::from("some text".to_string()),
+                        Node::from("more text".to_string()),
+                    ],
+                    None,
+                    ["c", "block"].iter().map(|s| s.to_string()).collect(),
                 ),
             ],
             Some("root".to_string()),
-            HashSet::new(),
+            ["block"].iter().map(|s| s.to_string()).collect(),
         );
 
         let stylesheet = Stylesheet {
@@ -45,8 +55,18 @@ mod tests {
                         classes: vec![],
                     }],
                     declarations: vec![Declaration {
-                        name: "margin".to_string(),
+                        name: "padding".to_string(),
                         value: Value::AbsoluteLength(2),
+                    }],
+                },
+                Rule {
+                    selectors: vec![Selector {
+                        id: None,
+                        classes: vec!["block".to_string()],
+                    }],
+                    declarations: vec![Declaration {
+                        name: "display".to_string(),
+                        value: Value::Keyword("block".to_string()),
                     }],
                 },
                 Rule {
@@ -61,11 +81,11 @@ mod tests {
                         },
                         Declaration {
                             name: "border".to_string(),
-                            value: Value::Keyword("solid".to_string()),
+                            value: Value::AbsoluteLength(2),
                         },
                         Declaration {
                             name: "height".to_string(),
-                            value: Value::AbsoluteLength(3),
+                            value: Value::AbsoluteLength(8),
                         },
                     ],
                 },
@@ -87,6 +107,27 @@ mod tests {
                         Declaration {
                             name: "margin".to_string(),
                             value: Value::Keyword("auto".to_string()),
+                        },
+                    ],
+                },
+                Rule {
+                    selectors: vec![Selector {
+                        id: None,
+                        classes: vec!["c".to_string()],
+                    }],
+                    declarations: vec![
+                        Declaration {
+                            name: "width".to_string(),
+                            //value: Value::RelativeLength(0.5),
+                            value: Value::AbsoluteLength(40),
+                        },
+                        Declaration {
+                            name: "height".to_string(),
+                            value: Value::AbsoluteLength(4),
+                        },
+                        Declaration {
+                            name: "margin-left".to_string(),
+                            value: Value::AbsoluteLength(6),
                         },
                     ],
                 },
@@ -122,14 +163,21 @@ mod tests {
             print!("{:?}", b.dimensions.content);
             print!("\n");
             for child in &b.children {
-                print_boxes(child, i+1);
+                print_boxes(child, i + 1);
             }
         }
 
         //println!("{:?}", layout_root.dimensions);
-
         print_boxes(&layout_root, 0);
+
+        let mut c = DebugCanvas::new(80, 20);
+
+        c.paint(&build_display_list(&layout_root));
+
+        c.print();
+
 
         panic!();
     }
+
 }
