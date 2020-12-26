@@ -18,8 +18,8 @@ mod tests {
             vec![
                 Node::new(
                     vec![
-                        Node::from("some text".to_string()),
-                        Node::from("more text".to_string()),
+                        Node::from("some 🥰 text".to_string()),
+                        //Node::from("more text".to_string()),
                     ],
                     None,
                     ["a", "block"].iter().map(|s| s.to_string()).collect(),
@@ -34,11 +34,37 @@ mod tests {
                 ),
                 Node::new(
                     vec![
-                        Node::from("someverylongtext".to_string()),
+                        Node::from("some very long text that needs line breaking to work".to_string()),
                         Node::from("more text".to_string()),
                     ],
                     None,
                     ["c", "block"].iter().map(|s| s.to_string()).collect(),
+                ),
+                Node::new(
+                    vec![
+                        Node::from("indented".to_string()),
+                        Node::new(
+                            vec![
+                                Node::from("indented".to_string()),
+                                Node::new(
+                                    vec![
+                                        Node::from("indented".to_string()),
+                                        Node::new(
+                                            vec![Node::from("indented".to_string())],
+                                            None,
+                                            ["d", "block"].iter().map(|s| s.to_string()).collect(),
+                                        ),
+                                    ],
+                                    None,
+                                    ["d", "block"].iter().map(|s| s.to_string()).collect(),
+                                ),
+                            ],
+                            None,
+                            ["d", "block"].iter().map(|s| s.to_string()).collect(),
+                        ),
+                    ],
+                    None,
+                    ["d", "block"].iter().map(|s| s.to_string()).collect(),
                 ),
             ],
             Some("root".to_string()),
@@ -154,6 +180,16 @@ mod tests {
                             value: Value::Border(Border::Heavy),
                         },
                     ],
+                },
+                Rule {
+                    selectors: vec![Selector {
+                        id: None,
+                        classes: vec!["d".to_string()],
+                    }],
+                    declarations: vec![Declaration {
+                        name: "padding-left".to_string(),
+                        value: Value::AbsoluteLength(2),
+                    }],
                 },
             ],
         };

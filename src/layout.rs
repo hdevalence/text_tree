@@ -161,9 +161,12 @@ impl<'a> LayoutBox<'a> {
     pub fn layout(&mut self, containing_block: &Dimensions) {
         match self.box_type {
             BoxType::Anonymous => {
-                println!("anonymous layout");
                 self.dimensions = containing_block.clone();
+                println!("anonymous layout {:?}", self.dimensions);
                 self.layout_inline_children();
+                // fix this when doing text runs
+                self.dimensions.border_box.height = 1;
+                println!("finished anonymous layout");
             }
             BoxType::InlineNode(_) => {
                 self.layout_inline(containing_block);
@@ -349,6 +352,7 @@ impl<'a> LayoutBox<'a> {
         for child in &mut self.children {
             child.layout(d);
             // Track the height so each child is laid out below the previous content.
+            println!("adding height {}", child.dimensions.margin_box().height);
             d.border_box.height += child.dimensions.margin_box().height;
         }
     }
