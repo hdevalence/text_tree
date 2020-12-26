@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+pub mod parse;
 
 #[derive(Debug)]
 pub struct Node {
@@ -12,7 +13,7 @@ pub enum NodeData {
     Element(ElementData),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ElementData {
     //pub(super) node_type: Option<String>,
     pub(super) id: Option<String>,
