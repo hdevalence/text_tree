@@ -3,9 +3,9 @@ use crate::style_tree::*;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Dimensions {
-    pub(crate) content: Rect,
+    pub(crate) border_box: Rect,
     pub(crate) padding: EdgeSizes,
-    pub(crate) border: EdgeSizes,
+    pub(crate) border: Borders,
     pub(crate) margin: EdgeSizes,
 }
 
@@ -25,18 +25,41 @@ pub struct EdgeSizes {
     pub(crate) bottom: i32,
 }
 
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Borders {
+    pub(crate) left: Border,
+    pub(crate) right: Border,
+    pub(crate) top: Border,
+    pub(crate) bottom: Border,
+}
+
+impl Borders {
+    fn sizes(&self) -> EdgeSizes {
+        EdgeSizes {
+            left: self.left.size(),
+            right: self.right.size(),
+            top: self.top.size(),
+            bottom: self.bottom.size(),
+        }
+    }
+}
+
 impl Dimensions {
-    // The area covered by the content area plus its padding.
-    fn padding_box(self) -> Rect {
-        self.content.expanded_by(&self.padding)
-    }
-    // The area covered by the content area plus padding and borders.
-    fn border_box(self) -> Rect {
-        self.padding_box().expanded_by(&self.border)
-    }
-    // The area covered by the content area plus padding, borders, and margin.
-    fn margin_box(self) -> Rect {
+    // The area covered by the border-box plus margin.
+    pub fn margin_box(&self) -> Rect {
         self.border_box().expanded_by(&self.margin)
+    }
+    // The area covered by the border-box (element width and height)
+    pub fn border_box(&self) -> Rect {
+        self.border_box
+    }
+    // The area covered by the border box minus the border.
+    pub fn padding_box(&self) -> Rect {
+        self.border_box.contracted_by(&self.border.sizes())
+    }
+    // The area covered by the border box minus the border and padding.
+    pub fn content_box(&self) -> Rect {
+        self.padding_box().contracted_by(&self.padding)
     }
 }
 
@@ -47,6 +70,16 @@ impl Rect {
             y: self.y - edges.top,
             width: self.width + edges.left + edges.right,
             height: self.height + edges.top + edges.bottom,
+        }
+    }
+
+    fn contracted_by(&self, edges: &EdgeSizes) -> Rect {
+        use std::cmp::{max, min};
+        Rect {
+            x: min(self.x + edges.left, self.x + self.width),
+            y: min(self.y + edges.top, self.y + self.height),
+            width: max(self.width - edges.left - edges.right, 0),
+            height: max(self.height - edges.top - edges.bottom, 0),
         }
     }
 }
@@ -125,6 +158,10 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn layout_block(&mut self, containing_block: &Dimensions) {
+        println!(
+            "laying out block in containing block {:?}",
+            containing_block
+        );
         // Child width can depend on parent width, so we need to calculate
         // this box's width before laying out its children.
         self.calculate_block_width(containing_block);
@@ -150,20 +187,31 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn calculate_block_width(&mut self, containing_block: &Dimensions) {
-        use Value::*;
-
         let style = self.get_style_node();
 
-        let auto = Keyword("auto".to_string());
+        let auto = Value::Keyword("auto".to_string());
         let mut width = style.value("width").unwrap_or(auto.clone());
 
+        use Value::AbsoluteLength;
         let zero = AbsoluteLength(0);
 
         let mut margin_left = style.lookup("margin-left", "margin", &zero).clone();
         let mut margin_right = style.lookup("margin-right", "margin", &zero).clone();
 
-        let border_left = style.lookup("border-left-width", "border-width", &zero);
-        let border_right = style.lookup("border-right-width", "border-width", &zero);
+        let border_left = if let Value::Border(b) =
+            style.lookup("border-left", "border", &Value::Border(Border::None))
+        {
+            b
+        } else {
+            Border::None
+        };
+        let border_right = if let Value::Border(b) =
+            style.lookup("border-right", "border", &Value::Border(Border::None))
+        {
+            b
+        } else {
+            Border::None
+        };
 
         let padding_left = style.lookup("padding-left", "padding", &zero);
         let padding_right = style.lookup("padding-right", "padding", &zero);
@@ -171,8 +219,8 @@ impl<'a> LayoutBox<'a> {
         let total = [
             &margin_left,
             &margin_right,
-            &border_left,
-            &border_right,
+            &Value::Border(border_left),
+            &Value::Border(border_right),
             &padding_left,
             &padding_right,
             &width,
@@ -183,7 +231,7 @@ impl<'a> LayoutBox<'a> {
 
         // If width is not auto and the total is wider than the container,
         // treat auto margins as 0.
-        if width != auto && total > containing_block.content.width {
+        if width != auto && total > containing_block.border_box().width {
             if margin_left == auto {
                 margin_left = AbsoluteLength(0);
             }
@@ -193,7 +241,7 @@ impl<'a> LayoutBox<'a> {
         }
 
         // Calculate box underflow
-        let underflow = containing_block.content.width - total;
+        let underflow = containing_block.border_box().width - total;
 
         match (width == auto, margin_left == auto, margin_right == auto) {
             // If the values are overconstrained, calculate margin_right.
@@ -240,19 +288,23 @@ impl<'a> LayoutBox<'a> {
 
         let d = &mut self.dimensions;
 
-        d.content.width = width.to_chars();
+        d.border_box.width = width.to_chars();
         d.padding.left = padding_left.to_chars();
         d.padding.right = padding_right.to_chars();
-        d.border.left = border_left.to_chars();
-        d.border.right = border_right.to_chars();
         d.margin.left = margin_left.to_chars();
         d.margin.right = margin_right.to_chars();
+        d.border.left = border_left;
+        d.border.right = border_right;
     }
 
     fn calculate_block_position(&mut self, containing_block: &Dimensions) {
-        use Value::*;
+        use Value::AbsoluteLength;
 
         let d = &mut self.dimensions;
+        println!(
+            "calculating block position in containing block {:?}, dimensions {:?}",
+            containing_block, d
+        );
         //let style = self.get_style_node();
         let style = match self.box_type {
             BoxType::Anonymous => {
@@ -268,32 +320,43 @@ impl<'a> LayoutBox<'a> {
         d.margin.top = style.lookup("margin-top", "margin", &zero).to_chars();
         d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_chars();
 
-        d.border.top = style
-            .lookup("border-top-width", "border-width", &zero)
-            .to_chars();
-        d.border.bottom = style
-            .lookup("border-bottom-width", "border-width", &zero)
-            .to_chars();
+        d.border.top = if let Value::Border(b) =
+            style.lookup("border-top", "border", &Value::Border(Border::None))
+        {
+            b
+        } else {
+            Border::None
+        };
+        d.border.bottom = if let Value::Border(b) =
+            style.lookup("border-bottom", "border", &Value::Border(Border::None))
+        {
+            b
+        } else {
+            Border::None
+        };
 
         d.padding.top = style.lookup("padding-top", "padding", &zero).to_chars();
         d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_chars();
 
-        d.content.x = containing_block.content.x + d.margin.left + d.border.left + d.padding.left;
+        d.border_box.x = containing_block.content_box().x + d.margin.left;
 
         // Position the box below all the previous boxes in the container.
-        d.content.y = containing_block.content.height
-            + containing_block.content.y
-            + d.margin.top
-            + d.border.top
-            + d.padding.top;
+        println!(
+            "containing content {:?}, d.margin {:?}",
+            containing_block.content_box(),
+            d.margin
+        );
+        d.border_box.y =
+            containing_block.content_box().height + containing_block.content_box().y + d.margin.top;
     }
 
     fn layout_block_children(&mut self) {
         let d = &mut self.dimensions;
+        println!("laying out block children with dimensions {:?}", d);
         for child in &mut self.children {
             child.layout(d);
             // Track the height so each child is laid out below the previous content.
-            d.content.height += child.dimensions.margin_box().height;
+            d.border_box.height += child.dimensions.margin_box().height;
         }
     }
 
@@ -301,7 +364,7 @@ impl<'a> LayoutBox<'a> {
         // If the height is set to an explicit length, use that exact length.
         // Otherwise, just keep the value set by `layout_block_children`.
         if let Some(Value::AbsoluteLength(h)) = self.get_style_node().value("height") {
-            self.dimensions.content.height = h;
+            self.dimensions.border_box.height = h;
         }
     }
 }

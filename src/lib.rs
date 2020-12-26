@@ -6,8 +6,6 @@ pub mod style_tree;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::content_tree::*;
     use super::display::*;
     use super::layout::*;
@@ -80,12 +78,12 @@ mod tests {
                             value: Value::AbsoluteLength(2),
                         },
                         Declaration {
-                            name: "border-width".to_string(),
-                            value: Value::AbsoluteLength(1),
+                            name: "border".to_string(),
+                            value: Value::Border(Border::Light),
                         },
                         Declaration {
                             name: "height".to_string(),
-                            value: Value::AbsoluteLength(4),
+                            value: Value::AbsoluteLength(12),
                         },
                     ],
                 },
@@ -134,20 +132,20 @@ mod tests {
                             value: Value::AbsoluteLength(2),
                         },
                         Declaration {
-                            name: "border-left-width".to_string(),
-                            value: Value::AbsoluteLength(2),
+                            name: "border-left".to_string(),
+                            value: Value::Border(Border::Double),
                         },
                         Declaration {
-                            name: "border-right-width".to_string(),
-                            value: Value::AbsoluteLength(2),
+                            name: "border-right".to_string(),
+                            value: Value::Border(Border::Double),
                         },
                         Declaration {
-                            name: "border-top-width".to_string(),
-                            value: Value::AbsoluteLength(1),
+                            name: "border-top".to_string(),
+                            value: Value::Border(Border::Light),
                         },
                         Declaration {
-                            name: "border-bottom-width".to_string(),
-                            value: Value::AbsoluteLength(1),
+                            name: "border-bottom".to_string(),
+                            value: Value::Border(Border::Heavy),
                         },
                     ],
                 },
@@ -156,14 +154,14 @@ mod tests {
 
         let styled_root = style_tree(&root, &stylesheet);
 
-        println!("{:?}", styled_root);
+        println!("{:#?}", styled_root);
 
         let mut layout_root = build_layout_tree(&styled_root);
 
-        println!("{:?}", layout_root);
+        println!("{:#?}", layout_root);
 
         layout_root.layout(&Dimensions {
-            content: Rect {
+            border_box: Rect {
                 x: 0,
                 y: 0,
                 width: 80,
@@ -174,13 +172,13 @@ mod tests {
             border: Default::default(),
         });
 
-        println!("{:?}", layout_root);
+        //println!("{:#?}", layout_root);
 
         fn print_boxes(b: &LayoutBox, i: usize) {
             for _ in 0..i {
                 print!(" ");
             }
-            print!("{:?}", b.dimensions.content);
+            print!("{:?}", b.dimensions.border_box);
             print!("\n");
             for child in &b.children {
                 print_boxes(child, i + 1);
@@ -196,8 +194,6 @@ mod tests {
 
         c.print();
 
-
         panic!();
     }
-
 }

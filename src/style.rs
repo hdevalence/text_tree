@@ -21,13 +21,36 @@ pub struct Declaration {
     pub(super) value: Value,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Border {
+    None,
+    Light,
+    Heavy,
+    Double,
+}
+
+impl Default for Border {
+    fn default() -> Self {
+        Border::None
+    }
+}
+
+impl Border {
+    pub fn size(&self) -> i32 {
+        match self {
+            Border::None => 0,
+            _ => 1,
+        }
+    }
+}
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
     Keyword(String),
-    // An absolute length, in characters.
+    /// An absolute length, in characters.
     AbsoluteLength(i32),
     // A relative length, between 0 and 1.
     //RelativeLength(f32),
+    Border(Border),
 }
 
 impl Value {
@@ -36,6 +59,7 @@ impl Value {
             // XXX handle relative lengths?
             Value::AbsoluteLength(l) => *l,
             _ => 0,
+            Value::Border(b) => b.size(),
         }
     }
 }

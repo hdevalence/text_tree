@@ -1,8 +1,9 @@
 use super::layout::*;
+use super::style::Border;
 
 pub enum DisplayCommand {
     FilledBox(Rect, char),
-    BorderBox(Rect, EdgeSizes),
+    BorderBox(Rect, Borders),
 }
 
 type DisplayList = Vec<DisplayCommand>;
@@ -23,10 +24,10 @@ fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox, char_idx: &
     *char_idx += 1;
 
     // draw background
-    list.push(DisplayCommand::FilledBox(d.content, bg));
+    list.push(DisplayCommand::FilledBox(d.content_box(), bg));
 
     // draw border
-    list.push(DisplayCommand::BorderBox(d.content, d.border));
+    list.push(DisplayCommand::BorderBox(d.border_box(), d.border));
 
     for child in &layout_box.children {
         render_layout_box(list, child, char_idx);
@@ -90,70 +91,122 @@ impl DebugCanvas {
                 let x1 = self.clamp_x(rect.x + rect.width);
                 let y0 = self.clamp_y(rect.y);
                 let y1 = self.clamp_y(rect.y + rect.height);
-                for y in (y0..y1) {
-                    for x in (x0..x1) {
+                for y in y0..y1 {
+                    for x in x0..x1 {
                         self.data[y as usize][x as usize] = *bg;
                     }
                 }
             }
-            DisplayCommand::BorderBox(rect, edges) => {
-                println!("rect, edges: {:?}, {:?}", rect, edges);
-                use std::cmp::{min, max};
+            DisplayCommand::BorderBox(rect, borders) => {
+                println!("rect, borders: {:?}, {:?}", rect, borders);
                 let x0 = self.clamp_x(rect.x);
                 let x1 = self.clamp_x(rect.x + rect.width);
                 let y0 = self.clamp_y(rect.y);
                 let y1 = self.clamp_y(rect.y + rect.height);
-                // is the border inside or outside the content?
-                /* inside
-                // top border
-                println!("y = {}..{}", y0, min(y0 + edges.top, y1));
-                for y in y0..min(y0 + edges.top, y1) {
-                    for x in (x0..x1) {
-                        self.data[y as usize][x as usize] = '-';
+
+                // border characters
+                let top_border = match borders.top {
+                    Border::None => None,
+                    Border::Light => Some('─'),
+                    Border::Heavy => Some('━'),
+                    Border::Double => Some('═'),
+                };
+                let bottom_border = match borders.bottom {
+                    Border::None => None,
+                    Border::Light => Some('─'),
+                    Border::Heavy => Some('━'),
+                    Border::Double => Some('═'),
+                };
+                let left_border = match borders.left {
+                    Border::None => None,
+                    Border::Light => Some('│'),
+                    Border::Heavy => Some('┃'),
+                    Border::Double => Some('║'),
+                };
+                let right_border = match borders.right {
+                    Border::None => None,
+                    Border::Light => Some('│'),
+                    Border::Heavy => Some('┃'),
+                    Border::Double => Some('║'),
+                };
+                // corner characters
+                let top_left = match (borders.left, borders.top) {
+                    (Border::None, _) => top_border,
+                    (_, Border::None) => left_border,
+                    (Border::Light, Border::Light) => Some('┌'),
+                    (Border::Heavy, Border::Light) => Some('┎'),
+                    (Border::Light, Border::Heavy) => Some('┍'),
+                    (Border::Heavy, Border::Heavy) => Some('┏'),
+                    (Border::Double, Border::Double) => Some('╔'),
+                    (Border::Double, _) => Some('╓'), // no double-to-heavy corners
+                    (_, Border::Double) => Some('╒'),
+                };
+                let top_right = match (borders.right, borders.top) {
+                    (Border::None, _) => top_border,
+                    (_, Border::None) => right_border,
+                    (Border::Light, Border::Light) => Some('┐'),
+                    (Border::Heavy, Border::Light) => Some('┒'),
+                    (Border::Light, Border::Heavy) => Some('┑'),
+                    (Border::Heavy, Border::Heavy) => Some('┓'),
+                    (Border::Double, Border::Double) => Some('╗'),
+                    (Border::Double, _) => Some('╖'),
+                    (_, Border::Double) => Some('╕'),
+                };
+                let bottom_left = match (borders.left, borders.bottom) {
+                    (Border::None, _) => bottom_border,
+                    (_, Border::None) => left_border,
+                    (Border::Light, Border::Light) => Some('└'),
+                    (Border::Heavy, Border::Light) => Some('┖'),
+                    (Border::Light, Border::Heavy) => Some('┕'),
+                    (Border::Heavy, Border::Heavy) => Some('┗'),
+                    (Border::Double, Border::Double) => Some('╚'),
+                    (Border::Double, _) => Some('╙'),
+                    (_, Border::Double) => Some('╘'),
+                };
+                let bottom_right = match (borders.right, borders.bottom) {
+                    (Border::None, _) => bottom_border,
+                    (_, Border::None) => right_border,
+                    (Border::Light, Border::Light) => Some('┘'),
+                    (Border::Heavy, Border::Light) => Some('┚'),
+                    (Border::Light, Border::Heavy) => Some('┙'),
+                    (Border::Heavy, Border::Heavy) => Some('┛'),
+                    (Border::Double, Border::Double) => Some('╝'),
+                    (Border::Double, _) => Some('╜'),
+                    (_, Border::Double) => Some('╛'),
+                };
+
+                if let Some(border) = top_border {
+                    for x in (x0 + 1)..(x1 - 1) {
+                        self.data[y0 as usize][x as usize] = border;
                     }
                 }
-                // right border
-                for x in max(x0, x1 - edges.right)..x1 {
-                    for y in (y0..y1) {
-                        self.data[y as usize][x as usize] = '|';
+                if let Some(border) = bottom_border {
+                    for x in (x0 + 1)..(x1 - 1) {
+                        self.data[(y1 - 1) as usize][x as usize] = border;
                     }
                 }
-                // bottom border
-                for y in max(y0, y1 - edges.top)..y1 {
-                    for x in (x0..x1) {
-                        self.data[y as usize][x as usize] = '-';
+                if let Some(border) = left_border {
+                    for y in (y0 + 1)..(y1 - 1) {
+                        self.data[y as usize][x0 as usize] = border;
                     }
                 }
-                // left border
-                for x in x0..min(x0 + edges.left, x1) {
-                    for y in (y0..y1) {
-                        self.data[y as usize][x as usize] = '|';
+                if let Some(border) = right_border {
+                    for y in (y0 + 1)..(y1 - 1) {
+                        self.data[y as usize][(x1 - 1) as usize] = border;
                     }
                 }
-                */
-                // top border
-                for y in (y0-edges.top)..y0 {
-                    for x in (x0..x1) {
-                        self.data[y as usize][x as usize] = '-';
-                    }
+
+                if let Some(corner) = top_left {
+                    self.data[y0 as usize][x0 as usize] = corner;
                 }
-                // right border
-                for x in x1..(x1+edges.right) {
-                    for y in (y0..y1) {
-                        self.data[y as usize][x as usize] = '|';
-                    }
+                if let Some(corner) = top_right {
+                    self.data[y0 as usize][(x1 - 1) as usize] = corner;
                 }
-                // bottom border
-                for y in y1..(y1+edges.bottom) {
-                    for x in (x0..x1) {
-                        self.data[y as usize][x as usize] = '-';
-                    }
+                if let Some(corner) = bottom_left {
+                    self.data[(y1 - 1) as usize][x0 as usize] = corner;
                 }
-                // left border
-                for x in (x0-edges.left)..x0 {
-                    for y in (y0..y1) {
-                        self.data[y as usize][x as usize] = '|';
-                    }
+                if let Some(corner) = bottom_right {
+                    self.data[(y1 - 1) as usize][(x1 - 1) as usize] = corner;
                 }
             }
         }
