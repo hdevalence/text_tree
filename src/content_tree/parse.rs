@@ -25,19 +25,16 @@ fn any_attribute(input: &str) -> IResult<&str, (&str, &str)> {
     pair(identifier, attribute_value)(input)
 }
 
+/// The contents of an HTML tag, *without* any delimiters.
+///
+/// This is factored out so that the same code can be used for `<foo>...</foo>`
+/// and for `<foo />`.
 #[tracing::instrument(level = "trace", err)]
-fn open_tag(input: &str) -> IResult<&str, ElementData> {
-    let (remaining, (tag_name, attrs)) = delimited(
-        tag("<"),
-        pair(
-            identifier,
-            opt(preceded(
-                multispace1,
-                separated_list0(multispace1, any_attribute),
-            )),
-        ),
-        tag(">"),
-    )(input)?;
+fn attrs(input: &str) -> IResult<&str, ElementData> {
+    let (remaining, attrs) = opt(preceded(
+        multispace1,
+        separated_list0(multispace1, any_attribute),
+    ))(input)?;
 
     let mut classes = HashSet::new();
     let mut id = None;
@@ -55,10 +52,64 @@ fn open_tag(input: &str) -> IResult<&str, ElementData> {
             }
         }
     }
-    classes.insert(tag_name.to_string());
     Ok((remaining, ElementData { id, classes }))
 }
 
+#[tracing::instrument(level = "trace", err)]
+fn open_tag(input: &str) -> IResult<&str, ElementData> {
+    let (remaining, (tag_name, mut attrs)) =
+        delimited(tag("<"), pair(identifier, attrs), tag(">"))(input)?;
+    attrs.classes.insert(tag_name.to_string());
+    Ok((remaining, attrs))
+}
+
+fn close_tag<'a>(name: &'a str) -> impl FnMut(&'a str) -> IResult<&str, &str> {
+    move |input| {
+        let span = tracing::trace_span!("close_tag", ?name, ?input,);
+        let _e = span.enter();
+        recognize(delimited(tag("</"), tag_no_case(name), tag(">")))(input)
+    }
+}
+
+#[tracing::instrument(level = "trace", err)]
+fn tag_no_children(input: &str) -> IResult<&str, Node> {
+    let (remaining, (tag_name, mut attrs)) = delimited(
+        tag("<"),
+        pair(identifier, attrs),
+        pair(multispace1, tag("/>")),
+    )(input)?;
+    attrs.classes.insert(tag_name.to_string());
+    Ok((
+        remaining,
+        Node {
+            children: Vec::new(),
+            node_data: NodeData::Element(attrs),
+        },
+    ))
+}
+
+#[tracing::instrument(level = "trace", err)]
+fn tag_children(input: &str) -> IResult<&str, Node> {
+    let (remaining, (tag_name, mut attrs)) = delimited(
+        tag("<"),
+        pair(identifier, attrs),
+        pair(multispace0, tag(">")),
+    )(input)?;
+    attrs.classes.insert(tag_name.to_string());
+    let (remaining, children) = terminated(many0(element), close_tag(tag_name))(remaining)?;
+    Ok((
+        remaining,
+        Node {
+            children,
+            node_data: NodeData::Element(attrs),
+        },
+    ))
+}
+
+#[tracing::instrument(level = "trace", err)]
+fn element(input: &str) -> IResult<&str, Node> {
+    alt((tag_no_children, tag_children))(input)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +207,58 @@ mod tests {
             }
         );
         assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn simple_nested() {
+        trace_init();
+
+        let html = "<a><b></b></a>";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+
+        let b = Node {
+            children: Vec::new(),
+            node_data: NodeData::Element(ElementData {
+                classes: Some("b".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+        let a = Node {
+            children: vec![b],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("a".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+
+        assert_eq!(parsed, a);
+        assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn bad_nesting_doesnt_parse() {
+        trace_init();
+
+        let html = "<a></b><b></a>";
+        let res = dbg!(element(html));
+        assert!(res.is_err(), "html: {:?}", html);
+
+        let html = "<a>";
+        let res = dbg!(element(html));
+        assert!(res.is_err(), "html: {:?}", html);
+
+        let html = "<a><b>";
+        let res = dbg!(element(html));
+        assert!(res.is_err(), "html: {:?}", html);
+
+        let html = "<a></b></a>";
+        let res = dbg!(element(html));
+        assert!(res.is_err(), "html: {:?}", html);
+
+        let html = "<a><b></a>";
+        let res = dbg!(element(html));
+        assert!(res.is_err(), "html: {:?}", html);
     }
 }

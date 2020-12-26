@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 pub mod parse;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Node {
     pub(super) children: Vec<Node>,
     pub(super) node_data: NodeData,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum NodeData {
     Text(String),
     Element(ElementData),
