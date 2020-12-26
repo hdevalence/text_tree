@@ -24,10 +24,12 @@ fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox, char_idx: &
     let bg = chars[*char_idx % chars.len()];
     *char_idx += 1;
 
-    // draw background
+    list.push(DisplayCommand::FilledBox(d.border_box(), bg));
+    let bg = chars[*char_idx % chars.len()];
+    *char_idx += 1;
+
     list.push(DisplayCommand::FilledBox(d.content_box(), bg));
 
-    // draw border
     list.push(DisplayCommand::BorderBox(d.border_box(), d.border));
 
     for child in &layout_box.children {
