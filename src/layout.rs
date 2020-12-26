@@ -130,11 +130,22 @@ pub fn build_layout_tree<'a>(styled_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
 }
 
 impl<'a> LayoutBox<'a> {
+    fn get_style_node(&self) -> &StyledNode<'a> {
+        match self.box_type {
+            BoxType::Anonymous => {
+                unimplemented!("Need to walk up the tree");
+            }
+            BoxType::InlineNode(s) | BoxType::BlockNode(s) => s,
+        }
+    }
+
     fn get_inline_container(&mut self) -> &mut LayoutBox<'a> {
         match self.box_type {
             BoxType::Anonymous => self,
             BoxType::InlineNode(_) => self,
             BoxType::BlockNode(_) => {
+                // If we just added a new anonymous box, keep using it.  Otherwise,
+                // add a new one.
                 match self.children.last() {
                     Some(&LayoutBox {
                         box_type: BoxType::Anonymous,
@@ -149,8 +160,14 @@ impl<'a> LayoutBox<'a> {
 
     pub fn layout(&mut self, containing_block: &Dimensions) {
         match self.box_type {
-            BoxType::Anonymous => {}
-            BoxType::InlineNode(_) => {}
+            BoxType::Anonymous => {
+                println!("anonymous layout");
+                self.dimensions = containing_block.clone();
+                self.layout_inline_children();
+            }
+            BoxType::InlineNode(_) => {
+                self.layout_inline(containing_block);
+            }
             BoxType::BlockNode(_) => {
                 self.layout_block(containing_block);
             }
@@ -171,15 +188,6 @@ impl<'a> LayoutBox<'a> {
         // Parent height can depend on child height, so `calculate_height`
         // must be called *after* the children are laid out.
         self.calculate_block_height();
-    }
-
-    fn get_style_node(&self) -> &StyledNode<'a> {
-        match self.box_type {
-            BoxType::Anonymous => {
-                unimplemented!("Need to walk up the tree");
-            }
-            BoxType::InlineNode(s) | BoxType::BlockNode(s) => s,
-        }
     }
 
     fn calculate_block_width(&mut self, containing_block: &Dimensions) {
@@ -350,6 +358,59 @@ impl<'a> LayoutBox<'a> {
         // Otherwise, the height is the size set by `layout_block_children`.
         if let Some(Value::AbsoluteLength(h)) = self.get_style_node().value("height") {
             self.dimensions.border_box.height = h;
+        }
+    }
+
+    fn layout_inline(&mut self, containing_block: &Dimensions) {
+        println!("layout inline {:?}", containing_block);
+        self.calculate_inline_position(containing_block);
+        self.layout_inline_children();
+        self.calculate_inline_width(containing_block);
+    }
+
+    fn calculate_inline_position(&mut self, containing_block: &Dimensions) {
+        let style = self.get_style_node();
+
+        use Value::AbsoluteLength;
+        let zero = AbsoluteLength(0);
+
+        let margin_left = style.lookup("margin-left", "margin", &zero).to_chars();
+        let margin_right = style.lookup("margin-right", "margin", &zero).to_chars();
+        let padding_left = style.lookup("padding-left", "padding", &zero).to_chars();
+        let padding_right = style.lookup("padding-right", "padding", &zero).to_chars();
+
+        let d = &mut self.dimensions;
+        d.margin.left = margin_left;
+        d.margin.right = margin_right;
+        d.padding.left = padding_left;
+        d.padding.right = padding_right;
+
+        // Inline elements have height 1 (?)
+        d.border_box.height = 1;
+        d.border_box.width = d.padding.left + d.padding.right;
+        d.border_box.x = containing_block.content_box().x + d.margin.left;
+        d.border_box.y = containing_block.content_box().y + containing_block.content_box().height;
+        println!("calculated inline position {:?}", d.border_box);
+    }
+
+    fn layout_inline_children(&mut self) {
+        let mut left_space = self.dimensions.clone();
+        for child in &mut self.children {
+            child.layout(&mut left_space);
+            // Move to the left so that each child is laid out after
+            // the previous children. TODO; line breaks.
+            let child_width = child.dimensions.margin_box().width;
+            println!("laid out child, adding its width {}", child_width);
+            left_space.border_box.x += child_width;
+            self.dimensions.border_box.width += child_width;
+        }
+    }
+
+    fn calculate_inline_width(&mut self, containing_block: &Dimensions) {
+        // If this is a text element, add the length of the string.
+        // Otherwise, the width is computed by `layout_inline_children`.
+        if let Some(text) = self.get_style_node().node().text() {
+            self.dimensions.border_box.width += text.chars().count() as i32;
         }
     }
 }

@@ -34,7 +34,7 @@ mod tests {
                 ),
                 Node::new(
                     vec![
-                        Node::from("some text".to_string()),
+                        Node::from("someverylongtext".to_string()),
                         Node::from("more text".to_string()),
                     ],
                     None,

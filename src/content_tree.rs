@@ -35,4 +35,11 @@ impl Node {
             node_data: NodeData::Element(ElementData { id, classes }),
         }
     }
+
+    pub fn text(&self) -> Option<&str> {
+        match self.node_data {
+            NodeData::Text(ref s) => Some(s),
+            NodeData::Element(_) => None,
+        }
+    }
 }

@@ -48,6 +48,10 @@ pub enum Display {
 }
 
 impl<'a> StyledNode<'a> {
+    pub fn node(&self) -> &'a Node {
+        self.node
+    }
+
     pub fn display(&self) -> Display {
         //println!("display value {:?}", self.value("display"));
         match self.value("display") {

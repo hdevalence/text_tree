@@ -1,36 +1,46 @@
 use super::layout::*;
 use super::style::Border;
 
-pub enum DisplayCommand {
+pub enum DisplayCommand<'a> {
     FilledBox(Rect, char),
     BorderBox(Rect, Borders),
+    Text(Rect, &'a str),
 }
 
-type DisplayList = Vec<DisplayCommand>;
+type DisplayList<'a> = Vec<DisplayCommand<'a>>;
 
-pub fn build_display_list(layout_root: &LayoutBox) -> DisplayList {
+pub fn build_display_list<'a>(layout_root: &LayoutBox<'a>) -> DisplayList<'a> {
     let mut list = Vec::new();
     render_layout_box(&mut list, layout_root, &mut 0);
     return list;
 }
 
-fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox, char_idx: &mut usize) {
+fn render_layout_box<'a>(
+    list: &mut DisplayList<'a>,
+    layout_box: &LayoutBox<'a>,
+    char_idx: &mut usize,
+) {
     let d = &layout_box.dimensions;
 
-    // choose a bg character
-    //let chars: Vec<char> = "'@,\"o&+#a*_!".chars().collect();
-    //let chars: Vec<char> = "🬠🬡🬢🬣🬤🬥🬦🬧🬨🬩🬪🬫🬬🬭🬮🬯".chars().collect();
-    let chars: Vec<char> = "░▒▓🮔🮽🮿".chars().collect();
-    let bg = chars[*char_idx % chars.len()];
-    *char_idx += 1;
-
-    list.push(DisplayCommand::FilledBox(d.border_box(), bg));
-    let bg = chars[*char_idx % chars.len()];
-    *char_idx += 1;
-
-    list.push(DisplayCommand::FilledBox(d.content_box(), bg));
-
-    list.push(DisplayCommand::BorderBox(d.border_box(), d.border));
+    match layout_box.box_type {
+        BoxType::BlockNode(_) => {
+            // choose a bg character
+            let chars: Vec<char> = "░▒▓🮔🮽🮿".chars().collect();
+            let bg = chars[*char_idx % chars.len()];
+            *char_idx += 1;
+            list.push(DisplayCommand::FilledBox(d.border_box(), bg));
+            let bg = chars[*char_idx % chars.len()];
+            *char_idx += 1;
+            list.push(DisplayCommand::FilledBox(d.content_box(), bg));
+            list.push(DisplayCommand::BorderBox(d.border_box(), d.border));
+        }
+        BoxType::InlineNode(node) => {
+            if let Some(text) = node.node().text() {
+                list.push(DisplayCommand::Text(d.content_box(), text));
+            }
+        }
+        BoxType::Anonymous => {}
+    }
 
     for child in &layout_box.children {
         render_layout_box(list, child, char_idx);
@@ -89,6 +99,18 @@ impl DebugCanvas {
 
     fn paint_item(&mut self, item: &DisplayCommand) {
         match item {
+            DisplayCommand::Text(rect, text) => {
+                let x1 = self.clamp_x(rect.x) as usize;
+                let y = self.clamp_y(rect.y) as usize;
+                let x2 = self.clamp_x(rect.x + rect.width) as usize;
+                for (i, c) in text.chars().enumerate() {
+                    let x = x1 + i;
+                    if x >= x2 {
+                        break;
+                    }
+                    self.data[y][x] = c;
+                }
+            }
             DisplayCommand::FilledBox(rect, bg) => {
                 let x0 = self.clamp_x(rect.x);
                 let x1 = self.clamp_x(rect.x + rect.width);
