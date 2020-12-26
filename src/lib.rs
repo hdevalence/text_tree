@@ -52,10 +52,16 @@ mod tests {
                         id: Some("root".to_string()),
                         classes: vec![],
                     }],
-                    declarations: vec![Declaration {
-                        name: "padding".to_string(),
-                        value: Value::AbsoluteLength(2),
-                    }],
+                    declarations: vec![
+                        Declaration {
+                            name: "padding".to_string(),
+                            value: Value::AbsoluteLength(2),
+                        },
+                        Declaration {
+                            name: "margin".to_string(),
+                            value: Value::AbsoluteLength(3),
+                        },
+                    ],
                 },
                 Rule {
                     selectors: vec![Selector {
@@ -188,7 +194,7 @@ mod tests {
         //println!("{:?}", layout_root.dimensions);
         print_boxes(&layout_root, 0);
 
-        let mut c = DebugCanvas::new(80, 25);
+        let mut c = DebugCanvas::new(80, 35);
 
         c.paint(&build_display_list(&layout_root));
 
