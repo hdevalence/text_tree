@@ -74,10 +74,10 @@ impl Rect {
     }
 
     fn contracted_by(&self, edges: &EdgeSizes) -> Rect {
-        use std::cmp::{max, min};
+        use std::cmp::max;
         Rect {
-            x: min(self.x + edges.left, self.x + self.width),
-            y: min(self.y + edges.top, self.y + self.height),
+            x: self.x + edges.left,
+            y: self.y + edges.top,
             width: max(self.width - edges.left - edges.right, 0),
             height: max(self.height - edges.top - edges.bottom, 0),
         }
@@ -218,22 +218,14 @@ impl<'a> LayoutBox<'a> {
         let padding_left = style.lookup("padding-left", "padding", &zero);
         let padding_right = style.lookup("padding-right", "padding", &zero);
 
-        let total = [
-            &margin_left,
-            &margin_right,
-            &Value::Border(border_left),
-            &Value::Border(border_right),
-            &padding_left,
-            &padding_right,
-            &width,
-        ]
-        .iter()
-        .map(|v| v.to_chars())
-        .sum::<i32>();
+        let total = [&margin_left, &margin_right, &width]
+            .iter()
+            .map(|v| v.to_chars())
+            .sum::<i32>();
 
         // If width is not auto and the total is wider than the container,
         // treat auto margins as 0.
-        if width != auto && total > containing_block.border_box().width {
+        if width != auto && total > containing_block.content_box().width {
             if margin_left == auto {
                 margin_left = AbsoluteLength(0);
             }
@@ -243,7 +235,7 @@ impl<'a> LayoutBox<'a> {
         }
 
         // Calculate box underflow
-        let underflow = containing_block.border_box().width - total;
+        let underflow = containing_block.content_box().width - total;
 
         match (width == auto, margin_left == auto, margin_right == auto) {
             // If the values are overconstrained, calculate margin_right.
@@ -339,6 +331,8 @@ impl<'a> LayoutBox<'a> {
 
         d.padding.top = style.lookup("padding-top", "padding", &zero).to_chars();
         d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_chars();
+        // Initialize the height with the size of the vertical padding.
+        d.border_box.height = d.padding.top + d.padding.bottom;
 
         d.border_box.x = containing_block.content_box().x + d.margin.left;
 
@@ -349,7 +343,7 @@ impl<'a> LayoutBox<'a> {
             d.margin
         );
         d.border_box.y =
-            containing_block.content_box().height + containing_block.content_box().y + d.margin.top;
+            containing_block.content_box().y + containing_block.content_box().height + d.margin.top;
     }
 
     fn layout_block_children(&mut self) {
@@ -364,7 +358,7 @@ impl<'a> LayoutBox<'a> {
 
     fn calculate_block_height(&mut self) {
         // If the height is set to an explicit length, use that exact length.
-        // Otherwise, just keep the value set by `layout_block_children`.
+        // Otherwise, the height is the size set by `layout_block_children`.
         if let Some(Value::AbsoluteLength(h)) = self.get_style_node().value("height") {
             self.dimensions.border_box.height = h;
         }
