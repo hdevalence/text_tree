@@ -158,10 +158,12 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn layout_block(&mut self, containing_block: &Dimensions) {
+        /*
         println!(
             "laying out block in containing block {:?}",
             containing_block
         );
+        */
         // Child width can depend on parent width, so we need to calculate
         // this box's width before laying out its children.
         self.calculate_block_width(containing_block);
@@ -302,7 +304,7 @@ impl<'a> LayoutBox<'a> {
 
         let d = &mut self.dimensions;
         println!(
-            "calculating block position in containing block {:?}, dimensions {:?}",
+            "calculating block position in containing block\n\t{:?},\ndimensions\n\t{:?}",
             containing_block, d
         );
         //let style = self.get_style_node();
@@ -342,7 +344,7 @@ impl<'a> LayoutBox<'a> {
 
         // Position the box below all the previous boxes in the container.
         println!(
-            "containing content {:?}, d.margin {:?}",
+            "containing content\n\t{:?},\nd.margin\n\t{:?}",
             containing_block.content_box(),
             d.margin
         );

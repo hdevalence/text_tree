@@ -154,11 +154,11 @@ mod tests {
 
         let styled_root = style_tree(&root, &stylesheet);
 
-        println!("{:#?}", styled_root);
+        //println!("{:#?}", styled_root);
 
         let mut layout_root = build_layout_tree(&styled_root);
 
-        println!("{:#?}", layout_root);
+        //println!("{:#?}", layout_root);
 
         layout_root.layout(&Dimensions {
             border_box: Rect {
