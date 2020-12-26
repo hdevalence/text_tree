@@ -8,6 +8,17 @@ use nom::{
 pub type IResult<I, T> = nom::IResult<I, T, VerboseError<I>>;
 
 #[tracing::instrument(level = "trace", err)]
+fn element(input: &str) -> IResult<&str, Node> {
+    alt((tag_children, tag_no_children, text))(input)
+}
+
+#[tracing::instrument(level = "trace", err)]
+fn text(input: &str) -> IResult<&str, Node> {
+    let (remaining, text) = take_till1(|c| c == '<')(input)?;
+    Ok((remaining, Node::from(text)))
+}
+
+#[tracing::instrument(level = "trace", err)]
 fn identifier(input: &str) -> IResult<&str, &str> {
     recognize(pair(
         alt((alpha1, tag("_"), tag(":"))),
@@ -31,31 +42,32 @@ fn any_attribute(input: &str) -> IResult<&str, (&str, &str)> {
 /// and for `<foo />`.
 #[tracing::instrument(level = "trace", err)]
 fn attrs(input: &str) -> IResult<&str, ElementData> {
-    let (remaining, attrs) = opt(preceded(
-        multispace1,
-        separated_list0(multispace1, any_attribute),
-    ))(input)?;
+    let (remaining, attrs) = opt(preceded(ws1, separated_list0(ws1, any_attribute)))(input)?;
 
     let mut classes = HashSet::new();
     let mut id = None;
     for (name, val) in attrs.into_iter().flat_map(IntoIterator::into_iter) {
         match name {
-            "class" => {
+            n if n.eq_ignore_ascii_case("class") => {
                 classes = val.split(' ').map(String::from).collect();
             }
-            "id" => {
+            n if n.eq_ignore_ascii_case("id") => {
                 id = Some(val.to_string());
             }
-            "style" => todo!("style attributes should probably 'work'..."),
+            n if n.eq_ignore_ascii_case("style") => {
+                todo!("style attributes should probably 'work'...")
+            }
             _ => {
                 // Skip other attributes for now...
             }
         }
     }
+    tracing::debug!(?classes, ?id, "parsed attrs");
     Ok((remaining, ElementData { id, classes }))
 }
 
 #[tracing::instrument(level = "trace", err)]
+#[cfg(test)]
 fn open_tag(input: &str) -> IResult<&str, ElementData> {
     let (remaining, (tag_name, mut attrs)) =
         delimited(tag("<"), pair(identifier, attrs), tag(">"))(input)?;
@@ -69,6 +81,31 @@ fn close_tag<'a>(name: &'a str) -> impl FnMut(&'a str) -> IResult<&str, &str> {
         let _e = span.enter();
         recognize(delimited(tag("</"), tag_no_case(name), tag(">")))(input)
     }
+}
+
+fn ws1(input: &str) -> IResult<&str, ()> {
+    value((), many1(alt((comment, multispace1))))(input)
+}
+
+fn non_space_ws1(input: &str) -> IResult<&str, ()> {
+    value((), many1(alt((comment, tag("\r\n"), tag("\n"), tag("\t")))))(input)
+}
+
+fn skip_non_space_ws<'a, T>(
+    parser: impl FnMut(&str) -> IResult<&str, T>,
+) -> impl FnMut(&'a str) -> IResult<&str, T> {
+    delimited(opt(non_space_ws1), parser, opt(non_space_ws1))
+}
+
+fn skip_ws<'a, T>(
+    parser: impl FnMut(&str) -> IResult<&str, T>,
+) -> impl FnMut(&'a str) -> IResult<&str, T> {
+    delimited(opt(ws1), parser, opt(ws1))
+}
+
+#[tracing::instrument(level = "trace", err)]
+fn comment(input: &str) -> IResult<&str, &str> {
+    delimited(tag("<!--"), take_until("-->"), tag("-->"))(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
@@ -96,7 +133,12 @@ fn tag_children(input: &str) -> IResult<&str, Node> {
         pair(multispace0, tag(">")),
     )(input)?;
     attrs.classes.insert(tag_name.to_string());
-    let (remaining, children) = terminated(many0(element), close_tag(tag_name))(remaining)?;
+    let (remaining, children) = terminated(
+        // Only skip "non-space" whitespace here. Spaces may be part of a
+        // text node.
+        many0(skip_non_space_ws(element)),
+        close_tag(tag_name),
+    )(remaining)?;
     Ok((
         remaining,
         Node {
@@ -106,10 +148,6 @@ fn tag_children(input: &str) -> IResult<&str, Node> {
     ))
 }
 
-#[tracing::instrument(level = "trace", err)]
-fn element(input: &str) -> IResult<&str, Node> {
-    alt((tag_no_children, tag_children))(input)
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,5 +298,96 @@ mod tests {
         let html = "<a><b></a>";
         let res = dbg!(element(html));
         assert!(res.is_err(), "html: {:?}", html);
+    }
+
+    #[test]
+    fn text() {
+        trace_init();
+
+        let html = "Hello world!";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+
+        assert_eq!(parsed, Node::from("Hello world!"));
+        assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn simple_nested_text_1() {
+        trace_init();
+
+        let html = "<a>Hello world!</a>";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+        let a = Node {
+            children: vec![Node::from("Hello world!")],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("a".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+
+        assert_eq!(parsed, a);
+        assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn simple_nested_text_2() {
+        trace_init();
+
+        let html = "<a>Hello <b>world</b>!</a>";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+        let b = Node {
+            children: vec![Node::from("world")],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("b".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+        let a = Node {
+            children: vec![Node::from("Hello "), b, Node::from("!")],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("a".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+
+        assert_eq!(parsed, a);
+        assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn simple_nested_text_attrs() {
+        trace_init();
+
+        let html =
+            "<a class=\"foo bar\" href=\"my cool website\">Hello <b id=\"thing\">world</b>!</a>";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+        let b = Node {
+            children: vec![Node::from("world")],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("b".to_string()).into_iter().collect(),
+                id: Some("thing".to_string()),
+            }),
+        };
+        let a = Node {
+            children: vec![Node::from("Hello "), b, Node::from("!")],
+            node_data: NodeData::Element(ElementData {
+                classes: vec!["a", "foo", "bar"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
+                id: None,
+            }),
+        };
+
+        assert_eq!(parsed, a);
+        assert_eq!(remaining, "");
     }
 }

@@ -20,11 +20,14 @@ pub struct ElementData {
     pub(super) classes: HashSet<String>,
 }
 
-impl From<String> for Node {
-    fn from(s: String) -> Node {
+impl<T> From<T> for Node
+where
+    String: From<T>,
+{
+    fn from(s: T) -> Node {
         Node {
             children: Vec::new(),
-            node_data: NodeData::Text(s),
+            node_data: NodeData::Text(String::from(s)),
         }
     }
 }
