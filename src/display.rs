@@ -101,7 +101,6 @@ impl DebugCanvas {
                 }
             }
             DisplayCommand::BorderBox(rect, borders) => {
-                println!("rect, borders: {:?}, {:?}", rect, borders);
                 let x0 = self.clamp_x(rect.x);
                 let x1 = self.clamp_x(rect.x + rect.width);
                 let y0 = self.clamp_y(rect.y);
