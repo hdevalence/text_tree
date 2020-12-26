@@ -19,7 +19,8 @@ fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox, char_idx: &
 
     // choose a bg character
     //let chars: Vec<char> = "'@,\"o&+#a*_!".chars().collect();
-    let chars: Vec<char> = "🬠🬡🬢🬣🬤🬥🬦🬧🬨🬩🬪🬫🬬🬭🬮🬯".chars().collect();
+    //let chars: Vec<char> = "🬠🬡🬢🬣🬤🬥🬦🬧🬨🬩🬪🬫🬬🬭🬮🬯".chars().collect();
+    let chars: Vec<char> = "░▒▓🮔🮽🮿".chars().collect();
     let bg = chars[*char_idx % chars.len()];
     *char_idx += 1;
 
@@ -46,7 +47,7 @@ impl DebugCanvas {
             width,
             height,
             data: (0..height)
-                .map(|_| (0..width).map(|_| '⋅').collect())
+                .map(|_| (0..width).map(|_| '🮕').collect())
                 .collect(),
         }
     }
