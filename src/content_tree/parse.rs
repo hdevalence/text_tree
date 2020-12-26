@@ -7,6 +7,7 @@ use nom::{
 /// Use `nom`'s verbose errors for pretty-printing.
 pub type IResult<I, T> = nom::IResult<I, T, VerboseError<I>>;
 
+#[tracing::instrument(level = "trace", err)]
 fn identifier(input: &str) -> IResult<&str, &str> {
     recognize(pair(
         alt((alpha1, tag("_"), tag(":"))),
@@ -14,18 +15,17 @@ fn identifier(input: &str) -> IResult<&str, &str> {
     ))(input)
 }
 
+#[tracing::instrument(level = "trace", err)]
 fn attribute_value(input: &str) -> IResult<&str, &str> {
     preceded(tag("="), delimited(tag("\""), take_until("\""), tag("\"")))(input)
 }
 
-fn named_attribute<'a>(name: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
-    preceded(tag(name), attribute_value)
-}
-
+#[tracing::instrument(level = "trace", err)]
 fn any_attribute(input: &str) -> IResult<&str, (&str, &str)> {
     pair(identifier, attribute_value)(input)
 }
 
+#[tracing::instrument(level = "trace", err)]
 fn open_tag(input: &str) -> IResult<&str, ElementData> {
     let (remaining, (tag_name, attrs)) = delimited(
         tag("<"),
@@ -62,8 +62,19 @@ fn open_tag(input: &str) -> IResult<&str, ElementData> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn trace_init() {
+        let _ = tracing_subscriber::fmt()
+            .with_test_writer()
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+            .with_max_level(tracing::Level::TRACE)
+            .try_init();
+    }
+
     #[test]
     fn simple_open_tag() {
+        trace_init();
+
         let open = "<a>";
         let (remaining, parsed) = dbg!(open_tag(open))
             .map_err(|e| e.to_string())
@@ -77,6 +88,8 @@ mod tests {
 
     #[test]
     fn open_tag_with_ignored_attrs() {
+        trace_init();
+
         let open = "<a href=\"my cool website\">";
         let (remaining, parsed) = dbg!(open_tag(open))
             .map_err(|e| e.to_string())
@@ -90,6 +103,8 @@ mod tests {
 
     #[test]
     fn open_tag_with_classes() {
+        trace_init();
+
         let open = "<a class=\"foo bar baz\">";
         let (remaining, parsed) = dbg!(open_tag(open))
             .map_err(|e| e.to_string())
@@ -105,6 +120,8 @@ mod tests {
 
     #[test]
     fn open_tag_with_classes_and_attrs() {
+        trace_init();
+
         let open = "<a href=\"my website\" class=\"foo bar baz\" something=\"lol\">";
         let (remaining, parsed) = dbg!(open_tag(open))
             .map_err(|e| e.to_string())
@@ -120,6 +137,8 @@ mod tests {
 
     #[test]
     fn open_tag_with_classes_and_id() {
+        trace_init();
+
         let open = "<a href=\"my website\" class=\"foo bar baz\" id=\"cool\">";
         let (remaining, parsed) = dbg!(open_tag(open))
             .map_err(|e| e.to_string())

@@ -6,3 +6,7 @@ edition = "2018"
 
 [dependencies]
 nom = "6"
+tracing = "0.1.22"
+
+[dev-dependencies]
+tracing-subscriber = "0.2"
