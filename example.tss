@@ -1,0 +1,35 @@
+#root {
+    padding: 2;
+    margin: 3;
+}
+
+.block {
+    display: block;
+}
+
+.class-a {
+    padding: 2;
+    border: light;
+    height: 12;
+}
+
+.class-b {
+    width: 20;
+    height: 2;
+    margin: auto;
+}
+
+.class-c {
+    width: 40;
+    height: 4;
+    margin-left: 6;
+    margin-bottom: 2;
+    border-left: double;
+    border-right: double;
+    border-top: light;
+    border-bottom: heavy;
+}
+
+.class-d {
+    padding-left: 2;
+}
