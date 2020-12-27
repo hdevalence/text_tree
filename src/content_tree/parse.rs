@@ -13,7 +13,7 @@ pub(super) fn document(input: &str) -> IResult<&str, Node> {
         opt(delimited(
             tag_no_case("<!doctype"),
             take_until(">"),
-            tag(">"),
+            char('>'),
         )),
         skip_ws(context("root tag", html_tag)),
     )(input)
@@ -44,13 +44,12 @@ pub(super) fn html_tag(input: &str) -> IResult<&str, Node> {
         self_closing_tag("command"),
         self_closing_tag("keygen"),
         self_closing_tag("menuitem"),
-        text,
     ))(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 fn text(input: &str) -> IResult<&str, Node> {
-    let (remaining, text) = context("text", preceded(not(tag("<")), take_until("<")))(input)?;
+    let (remaining, text) = context("text", preceded(not(char('<')), take_until("<")))(input)?;
     let re = regex::Regex::new("\\s+").unwrap();
     let text = re.replace_all(text.trim_matches('\n'), " ");
     Ok((remaining, Node::from(text)))
@@ -71,7 +70,7 @@ fn identifier(input: &str) -> IResult<&str, &str> {
 fn attribute_value(input: &str) -> IResult<&str, &str> {
     context(
         "attribute value",
-        preceded(tag("="), delimited(tag("\""), take_until("\""), tag("\""))),
+        preceded(char('='), delimited(char('"'), take_until("\""), char('"'))),
     )(input)
 }
 
@@ -114,7 +113,7 @@ fn attrs(input: &str) -> IResult<&str, ElementData> {
 #[cfg(test)]
 fn open_tag(input: &str) -> IResult<&str, ElementData> {
     let (remaining, (tag_name, mut attrs)) =
-        delimited(tag("<"), pair(identifier, attrs), tag(">"))(input)?;
+        delimited(char('<'), pair(identifier, attrs), char('>'))(input)?;
     attrs.classes.insert(tag_name.to_string());
     Ok((remaining, attrs))
 }
@@ -122,9 +121,9 @@ fn open_tag(input: &str) -> IResult<&str, ElementData> {
 fn self_closing_tag<'a>(name: &'static str) -> impl FnMut(&'a str) -> IResult<&str, Node> {
     context(name, move |input| {
         let (remaining, mut attrs) = delimited(
-            tag("<"),
+            char('<'),
             skip_ws(preceded(tag_no_case(name), attrs)),
-            preceded(opt(tag("/")), tag(">")),
+            preceded(opt(char('/')), tag(">")),
         )(input)?;
         attrs.classes.insert(name.to_string());
         Ok((
@@ -141,7 +140,7 @@ fn close_tag<'a>(name: &'a str) -> impl FnMut(&'a str) -> IResult<&str, &str> {
     move |input| {
         let span = tracing::trace_span!("close_tag", ?name, ?input,);
         let _e = span.enter();
-        recognize(delimited(tag("</"), tag_no_case(name), tag(">")))(input)
+        recognize(delimited(tag("</"), tag_no_case(name), char('>')))(input)
     }
 }
 
@@ -183,9 +182,9 @@ fn tag_children(input: &str) -> IResult<&str, Node> {
     let (remaining, (tag_name, mut attrs)) = context(
         "open tag",
         delimited(
-            tag("<"),
+            char('<'),
             pair(identifier, attrs),
-            preceded(multispace0, tag(">")),
+            preceded(multispace0, char('>')),
         ),
     )(input)?;
     attrs.classes.insert(tag_name.to_string());
@@ -485,5 +484,15 @@ mod tests {
         let (_, _) = dbg!(element(html))
             .map_err(|e| e.to_string())
             .expect("it should parse");
+    }
+
+    #[test]
+    fn nice_parse_errors() {
+        trace_init();
+        use nom::Finish;
+
+        let html = r#"<p foo bar>"#;
+        let err = dbg!(html_tag(html)).finish().expect_err("shouldn't parse");
+        println!("nice parse error: {}", nom::error::convert_error(html, err))
     }
 }
