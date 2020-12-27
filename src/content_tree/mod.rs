@@ -3,8 +3,8 @@ pub mod parse;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Node {
-    pub(super) children: Vec<Node>,
     pub(super) node_data: NodeData,
+    pub(super) children: Vec<Node>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -38,7 +38,10 @@ impl std::str::FromStr for Node {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use nom::Finish;
         match parse::document(s).finish() {
-            Ok((_remaining, node)) => Ok(node),
+            Ok((remaining, node)) => {
+                dbg!(remaining);
+                Ok(node)
+            }
             Err(e) => Err(nom::error::convert_error(s, e)),
         }
     }

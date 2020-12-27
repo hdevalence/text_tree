@@ -1,5 +1,5 @@
 use super::*;
-use nom::error::VerboseError;
+use nom::error::{context, VerboseError};
 use nom::{
     branch::*, bytes::complete::*, character::complete::*, combinator::*, multi::*, sequence::*,
 };
@@ -15,37 +15,49 @@ pub(super) fn document(input: &str) -> IResult<&str, Node> {
             take_until(">"),
             tag(">"),
         )),
-        skip_ws(tag_children),
+        skip_ws(context("root tag", tag_children)),
     )(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 pub(super) fn element(input: &str) -> IResult<&str, Node> {
-    alt((tag_children, tag_no_children, text))(input)
+    alt((
+        context("tag with children", tag_children),
+        context("tag without children", tag_no_children),
+        text,
+    ))(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 fn text(input: &str) -> IResult<&str, Node> {
-    let (remaining, text) = take_until("<")(input)?;
+    let (remaining, text) = context("text", preceded(not(tag("<")), take_until("<")))(input)?;
+    let re = regex::Regex::new("\\s+").unwrap();
+    let text = re.replace_all(text, " ");
     Ok((remaining, Node::from(text)))
 }
 
 #[tracing::instrument(level = "trace", err)]
 fn identifier(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
-        alt((alpha1, tag("_"), tag(":"))),
-        many0(alt((alphanumeric1, tag("_"), tag(":"), tag(".")))),
-    ))(input)
+    context(
+        "identifier",
+        recognize(pair(
+            alt((alpha1, tag("_"), tag(":"))),
+            many0(alt((alphanumeric1, tag("_"), tag(":"), tag(".")))),
+        )),
+    )(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 fn attribute_value(input: &str) -> IResult<&str, &str> {
-    preceded(tag("="), delimited(tag("\""), take_until("\""), tag("\"")))(input)
+    context(
+        "attribute value",
+        preceded(tag("="), delimited(tag("\""), take_until("\""), tag("\""))),
+    )(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 fn any_attribute(input: &str) -> IResult<&str, (&str, &str)> {
-    pair(identifier, attribute_value)(input)
+    context("attribute", pair(identifier, attribute_value))(input)
 }
 
 /// The contents of an HTML tag, *without* any delimiters.
@@ -100,7 +112,15 @@ fn ws1(input: &str) -> IResult<&str, ()> {
 }
 
 fn non_space_ws1(input: &str) -> IResult<&str, ()> {
-    value((), many1(alt((comment, tag("\r\n"), tag("\n"), tag("\t")))))(input)
+    value(
+        (),
+        many1(alt((
+            comment,
+            preceded(tag("\r\n"), multispace0),
+            preceded(tag("\n"), multispace0),
+            tag("\t"),
+        ))),
+    )(input)
 }
 
 fn skip_non_space_ws<'a, T>(
@@ -139,17 +159,20 @@ fn tag_no_children(input: &str) -> IResult<&str, Node> {
 
 #[tracing::instrument(level = "trace", err)]
 fn tag_children(input: &str) -> IResult<&str, Node> {
-    let (remaining, (tag_name, mut attrs)) = delimited(
-        tag("<"),
-        pair(identifier, attrs),
-        pair(multispace0, tag(">")),
+    let (remaining, (tag_name, mut attrs)) = context(
+        "open tag",
+        delimited(
+            tag("<"),
+            pair(identifier, attrs),
+            preceded(multispace0, tag(">")),
+        ),
     )(input)?;
     attrs.classes.insert(tag_name.to_string());
     let (remaining, children) = terminated(
         // Only skip "non-space" whitespace here. Spaces may be part of a
         // text node.
-        many0(skip_non_space_ws(element)),
-        close_tag(tag_name),
+        context("children", many0(skip_non_space_ws(element))),
+        context("close tag", close_tag(tag_name)),
     )(remaining)?;
     Ok((
         remaining,
@@ -313,6 +336,46 @@ mod tests {
     }
 
     #[test]
+    fn newline() {
+        trace_init();
+
+        let html = "<a>\n</a>";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+        let a = Node {
+            children: vec![],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("a".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+
+        assert_eq!(parsed, a);
+        assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn newline_text() {
+        trace_init();
+
+        let html = "<a>\nHello world\n</a>";
+        let (remaining, parsed) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
+        let a = Node {
+            children: vec![Node::from("Hello world\n")],
+            node_data: NodeData::Element(ElementData {
+                classes: Some("a".to_string()).into_iter().collect(),
+                id: None,
+            }),
+        };
+
+        assert_eq!(parsed, a);
+        assert_eq!(remaining, "");
+    }
+
+    #[test]
     fn text() {
         trace_init();
 
@@ -401,5 +464,16 @@ mod tests {
 
         assert_eq!(parsed, a);
         assert_eq!(remaining, "");
+    }
+
+    #[test]
+    fn bad_p() {
+        trace_init();
+
+        let html = r#"<p>This domain is for use in illustrative examples in documents. You may use this
+        domain in literature without prior coordination or asking for permission.</p>"#;
+        let (_, _) = dbg!(element(html))
+            .map_err(|e| e.to_string())
+            .expect("it should parse");
     }
 }
