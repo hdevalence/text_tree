@@ -1,102 +1,160 @@
-pub mod content_tree;
-pub mod display;
-pub mod layout;
-pub mod style;
-pub mod style_tree;
+use super::content_tree::*;
+mod parse;
 
-pub fn print_boxes(b: &layout::LayoutBox) {
-    fn print_boxes2(b: &layout::LayoutBox, i: usize) {
-        for _ in 0..i {
-            print!(" ");
-        }
-        print!("{:?}", b.dimensions.border_box);
-        print!("\n");
-        for child in &b.children {
-            print_boxes2(child, i + 1);
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Stylesheet {
+    pub(super) rules: Vec<Rule>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Rule {
+    pub(super) selectors: Vec<Selector>,
+    pub(super) declarations: Vec<Declaration>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Selector {
+    //node_type: Option<String>,
+    pub(super) id: Option<String>,
+    pub(super) classes: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Declaration {
+    pub(super) name: String,
+    pub(super) value: Value,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Border {
+    None,
+    Light,
+    Heavy,
+    Double,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum DisplayKind {
+    None,
+    Inline,
+    Block,
+}
+
+impl Default for Border {
+    fn default() -> Self {
+        Border::None
+    }
+}
+
+impl Border {
+    pub fn size(&self) -> i32 {
+        match self {
+            Border::None => 0,
+            _ => 1,
         }
     }
-    print_boxes2(b, 0)
+}
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Value {
+    Keyword(String),
+    Auto,
+    /// An absolute length, in characters.
+    AbsoluteLength(i32),
+    // A relative length, between 0 and 1.
+    //RelativeLength(f32),
+    Border(Border),
+    Display(DisplayKind),
+}
+
+impl Value {
+    pub fn to_chars(&self) -> i32 {
+        match self {
+            // XXX handle relative lengths?
+            Value::AbsoluteLength(l) => *l,
+            Value::Border(b) => b.size(),
+            _ => 0,
+        }
+    }
+}
+
+pub type Specificity = (usize, usize, usize);
+
+impl Selector {
+    pub fn specificity(&self) -> Specificity {
+        (
+            self.id.iter().count(),
+            self.classes.len(),
+            0, //self.node_type.iter().count(),
+        )
+    }
+
+    pub fn matches(&self, element: &ElementData) -> bool {
+        //println!("checking if {:?} matches {:?}", self, element);
+        if self.id.iter().any(|id| element.id != Some(id.to_string())) {
+            //println!("id does not match");
+            return false;
+        }
+
+        if self
+            .classes
+            .iter()
+            .any(|class| !element.classes.contains(class))
+        {
+            //println!("class does not match");
+            return false;
+        }
+
+        //println!("matches");
+        true
+    }
+}
+
+type MatchedRule<'a> = (Specificity, &'a Rule);
+
+impl Rule {
+    pub fn match_rule<'a, 'b>(&'a self, element: &'b ElementData) -> Option<MatchedRule<'a>> {
+        self.selectors
+            .iter()
+            .find(|selector| selector.matches(element))
+            .map(|selector| (selector.specificity(), self))
+    }
+}
+
+impl Stylesheet {
+    pub fn matching_rules<'a, 'b>(&'a self, element: &'b ElementData) -> Vec<MatchedRule<'a>> {
+        self.rules
+            .iter()
+            .filter_map(|rule| rule.match_rule(element))
+            .collect()
+    }
+}
+
+impl std::str::FromStr for Stylesheet {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use nom::Finish;
+        match parse::stylesheet(s).finish() {
+            Ok((_remaining, stylesheet)) => Ok(stylesheet),
+            Err(e) => Err(nom::error::convert_error(s, e)),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::content_tree::*;
-    use super::display::*;
-    use super::layout::*;
-    use super::style::*;
-    use super::style_tree::*;
+    use super::*;
+    use pretty_assertions::assert_eq;
 
-    fn trace_init() {
-        let _ = tracing_subscriber::fmt()
-            .with_test_writer()
-            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
-            .with_max_level(tracing::Level::TRACE)
-            .try_init();
+    #[test]
+    fn tuple_cmp() {
+        let a = (1, 1, 3);
+        let b = (2, 1, 2);
+        assert!(a < b);
     }
 
     #[test]
-    fn build_and_style_and_layout_and_paint_dom() {
-        trace_init();
-
-        let root = Node::new(
-            vec![
-                Node::new(
-                    vec![
-                        Node::from("some 🥰 text".to_string()),
-                        //Node::from("more text".to_string()),
-                    ],
-                    None,
-                    ["a", "block"].iter().map(|s| s.to_string()).collect(),
-                ),
-                Node::new(
-                    vec![
-                        Node::from("some text".to_string()),
-                        Node::from("more text".to_string()),
-                    ],
-                    None,
-                    ["b", "block"].iter().map(|s| s.to_string()).collect(),
-                ),
-                Node::new(
-                    vec![
-                        Node::from(
-                            "some very long text that needs line breaking to work".to_string(),
-                        ),
-                        Node::from("more text".to_string()),
-                    ],
-                    None,
-                    ["c", "block"].iter().map(|s| s.to_string()).collect(),
-                ),
-                Node::new(
-                    vec![
-                        Node::from("indented".to_string()),
-                        Node::new(
-                            vec![
-                                Node::from("indented".to_string()),
-                                Node::new(
-                                    vec![
-                                        Node::from("indented".to_string()),
-                                        Node::new(
-                                            vec![Node::from("indented".to_string())],
-                                            None,
-                                            ["d", "block"].iter().map(|s| s.to_string()).collect(),
-                                        ),
-                                    ],
-                                    None,
-                                    ["d", "block"].iter().map(|s| s.to_string()).collect(),
-                                ),
-                            ],
-                            None,
-                            ["d", "block"].iter().map(|s| s.to_string()).collect(),
-                        ),
-                    ],
-                    None,
-                    ["d", "block"].iter().map(|s| s.to_string()).collect(),
-                ),
-            ],
-            Some("root".to_string()),
-            ["block"].iter().map(|s| s.to_string()).collect(),
-        );
-
+    fn parse_example_stylesheet() {
+        let text = include_str!("../../example.tss");
         let stylesheet = Stylesheet {
             rules: vec![
                 Rule {
@@ -113,10 +171,6 @@ mod tests {
                             name: "margin".to_string(),
                             value: Value::AbsoluteLength(3),
                         },
-                        Declaration {
-                            name: "border".to_string(),
-                            value: Value::Border(Border::Double),
-                        },
                     ],
                 },
                 Rule {
@@ -132,7 +186,7 @@ mod tests {
                 Rule {
                     selectors: vec![Selector {
                         id: None,
-                        classes: vec!["a".to_string()],
+                        classes: vec!["class-a".to_string()],
                     }],
                     declarations: vec![
                         Declaration {
@@ -152,7 +206,7 @@ mod tests {
                 Rule {
                     selectors: vec![Selector {
                         id: None,
-                        classes: vec!["b".to_string()],
+                        classes: vec!["class-b".to_string()],
                     }],
                     declarations: vec![
                         Declaration {
@@ -173,7 +227,7 @@ mod tests {
                 Rule {
                     selectors: vec![Selector {
                         id: None,
-                        classes: vec!["c".to_string()],
+                        classes: vec!["class-c".to_string()],
                     }],
                     declarations: vec![
                         Declaration {
@@ -214,7 +268,7 @@ mod tests {
                 Rule {
                     selectors: vec![Selector {
                         id: None,
-                        classes: vec!["d".to_string()],
+                        classes: vec!["class-d".to_string()],
                     }],
                     declarations: vec![Declaration {
                         name: "padding-left".to_string(),
@@ -223,38 +277,6 @@ mod tests {
                 },
             ],
         };
-
-        let styled_root = style_tree(&root, &stylesheet);
-
-        //println!("{:#?}", styled_root);
-
-        let mut layout_root = build_layout_tree(&styled_root);
-
-        //println!("{:#?}", layout_root);
-
-        layout_root.layout(&Dimensions {
-            border_box: Rect {
-                x: 0,
-                y: 0,
-                width: 80,
-                height: 0,
-            },
-            margin: Default::default(),
-            padding: Default::default(),
-            border: Default::default(),
-        });
-
-        //println!("{:#?}", layout_root);
-
-        //println!("{:?}", layout_root.dimensions);
-        super::print_boxes(&layout_root);
-
-        let mut c = DebugCanvas::new(80, 35);
-
-        c.paint(&build_display_list(&layout_root));
-
-        c.print();
-
-        panic!();
+        assert_eq!(text.parse::<Stylesheet>(), Ok(stylesheet))
     }
 }

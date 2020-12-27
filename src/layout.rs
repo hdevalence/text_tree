@@ -3,10 +3,18 @@ use crate::style_tree::*;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Dimensions {
-    pub(crate) border_box: Rect,
-    pub(crate) padding: EdgeSizes,
-    pub(crate) border: Borders,
-    pub(crate) margin: EdgeSizes,
+    pub border_box: Rect,
+    pub padding: EdgeSizes,
+    pub border: Borders,
+    pub margin: EdgeSizes,
+}
+
+impl Dimensions {
+    pub fn from_width(width: i32) -> Self {
+        let mut d = Self::default();
+        d.border_box.width = width;
+        d
+    }
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -110,16 +118,16 @@ impl<'a> LayoutBox<'a> {
 
 pub fn build_layout_tree<'a>(styled_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
     let mut root = LayoutBox::new(match styled_node.display() {
-        Display::None => panic!("root has display: none;"),
-        Display::Inline => BoxType::InlineNode(styled_node),
-        Display::Block => BoxType::BlockNode(styled_node),
+        DisplayKind::None => panic!("root has display: none;"),
+        DisplayKind::Inline => BoxType::InlineNode(styled_node),
+        DisplayKind::Block => BoxType::BlockNode(styled_node),
     });
 
     for child in &styled_node.children {
         match child.display() {
-            Display::None => {}
-            Display::Block => root.children.push(build_layout_tree(child)),
-            Display::Inline => root
+            DisplayKind::None => {}
+            DisplayKind::Block => root.children.push(build_layout_tree(child)),
+            DisplayKind::Inline => root
                 .get_inline_container()
                 .children
                 .push(build_layout_tree(child)),
@@ -162,11 +170,13 @@ impl<'a> LayoutBox<'a> {
         match self.box_type {
             BoxType::Anonymous => {
                 self.dimensions = containing_block.clone();
-                println!("anonymous layout {:?}", self.dimensions);
+                let span = tracing::info_span!("anonymous layout", ?self.dimensions);
+                let _e = span.enter();
+                tracing::info!("starting anonymous layout...");
                 self.layout_inline_children();
                 // fix this when doing text runs
                 self.dimensions.border_box.height = 1;
-                println!("finished anonymous layout");
+                tracing::info!("finished anonymous layout");
             }
             BoxType::InlineNode(_) => {
                 self.layout_inline(containing_block);
@@ -194,13 +204,12 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn calculate_block_width(&mut self, containing_block: &Dimensions) {
+        use Value::{AbsoluteLength, Auto};
+        let zero = AbsoluteLength(0);
+
         let style = self.get_style_node();
 
-        let auto = Value::Keyword("auto".to_string());
-        let mut width = style.value("width").unwrap_or(auto.clone());
-
-        use Value::AbsoluteLength;
-        let zero = AbsoluteLength(0);
+        let mut width = style.value("width").unwrap_or(Auto);
 
         let mut margin_left = style.lookup("margin-left", "margin", &zero).clone();
         let mut margin_right = style.lookup("margin-right", "margin", &zero).clone();
@@ -230,11 +239,11 @@ impl<'a> LayoutBox<'a> {
 
         // If width is not auto and the total is wider than the container,
         // treat auto margins as 0.
-        if width != auto && total > containing_block.content_box().width {
-            if margin_left == auto {
+        if width != Auto && total > containing_block.content_box().width {
+            if margin_left == Auto {
                 margin_left = AbsoluteLength(0);
             }
-            if margin_right == auto {
+            if margin_right == Auto {
                 margin_right = AbsoluteLength(0);
             }
         }
@@ -242,7 +251,7 @@ impl<'a> LayoutBox<'a> {
         // Calculate box underflow
         let underflow = containing_block.content_box().width - total;
 
-        match (width == auto, margin_left == auto, margin_right == auto) {
+        match (width == Auto, margin_left == Auto, margin_right == Auto) {
             // If the values are overconstrained, calculate margin_right.
             (false, false, false) => {
                 margin_right = AbsoluteLength(margin_right.to_chars() + underflow);
@@ -258,10 +267,10 @@ impl<'a> LayoutBox<'a> {
 
             // If width is set to auto, any other auto values become 0.
             (true, _, _) => {
-                if margin_left == auto {
+                if margin_left == Auto {
                     margin_left = AbsoluteLength(0);
                 }
-                if margin_right == auto {
+                if margin_right == Auto {
                     margin_right = AbsoluteLength(0);
                 }
 
@@ -352,9 +361,10 @@ impl<'a> LayoutBox<'a> {
         let d = &mut self.dimensions;
         for child in &mut self.children {
             child.layout(d);
-            // Track the height so each child is laid out below the previous content.
-            println!("adding height {}", child.dimensions.margin_box().height);
-            d.border_box.height += child.dimensions.margin_box().height;
+            // Track the height so each child is laid out below the previous content
+            let height = child.dimensions.margin_box().height;
+            tracing::debug!(height, "adding");
+            d.border_box.height += height;
         }
     }
 
@@ -367,9 +377,15 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn layout_inline(&mut self, containing_block: &Dimensions) {
-        println!("layout inline {:?}", containing_block);
+        let span = tracing::info_span!("layout inline", ?containing_block);
+        let _e = span.enter();
+        tracing::debug!("calculating inline position...");
         self.calculate_inline_position(containing_block);
+
+        tracing::debug!("laying out inline children...");
         self.layout_inline_children();
+
+        tracing::debug!("calculating inline width...");
         self.calculate_inline_width(containing_block);
     }
 
@@ -395,7 +411,7 @@ impl<'a> LayoutBox<'a> {
         d.border_box.width = d.padding.left + d.padding.right;
         d.border_box.x = containing_block.content_box().x + d.margin.left;
         d.border_box.y = containing_block.content_box().y + containing_block.content_box().height;
-        println!("calculated inline position {:?}", d.border_box);
+        tracing::debug!(?d.border_box, "calculated inline position");
     }
 
     fn layout_inline_children(&mut self) {
@@ -405,7 +421,7 @@ impl<'a> LayoutBox<'a> {
             // Move to the left so that each child is laid out after
             // the previous children. TODO; line breaks.
             let child_width = child.dimensions.margin_box().width;
-            println!("laid out child, adding its width {}", child_width);
+            tracing::debug!(child.width = child_width, "laid out child, adding its width");
             left_space.border_box.x += child_width;
             self.dimensions.border_box.width += child_width;
         }
