@@ -4,6 +4,20 @@ pub mod layout;
 pub mod style;
 pub mod style_tree;
 
+pub fn print_boxes(b: &layout::LayoutBox) {
+    fn print_boxes2(b: &layout::LayoutBox, i: usize) {
+        for _ in 0..i {
+            print!(" ");
+        }
+        print!("{:?}", b.dimensions.border_box);
+        print!("\n");
+        for child in &b.children {
+            print_boxes2(child, i + 1);
+        }
+    }
+    print_boxes2(b, 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::content_tree::*;
@@ -232,19 +246,8 @@ mod tests {
 
         //println!("{:#?}", layout_root);
 
-        fn print_boxes(b: &LayoutBox, i: usize) {
-            for _ in 0..i {
-                print!(" ");
-            }
-            print!("{:?}", b.dimensions.border_box);
-            print!("\n");
-            for child in &b.children {
-                print_boxes(child, i + 1);
-            }
-        }
-
         //println!("{:?}", layout_root.dimensions);
-        print_boxes(&layout_root, 0);
+        super::print_boxes(&layout_root);
 
         let mut c = DebugCanvas::new(80, 35);
 
