@@ -32,6 +32,18 @@ where
     }
 }
 
+impl std::str::FromStr for Node {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use nom::Finish;
+        match parse::document(s).finish() {
+            Ok((_remaining, node)) => Ok(node),
+            Err(e) => Err(nom::error::convert_error(s, e)),
+        }
+    }
+}
+
 impl Node {
     pub fn new(children: Vec<Node>, id: Option<String>, classes: HashSet<String>) -> Node {
         Node {

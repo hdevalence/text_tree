@@ -8,13 +8,25 @@ use nom::{
 pub type IResult<I, T> = nom::IResult<I, T, VerboseError<I>>;
 
 #[tracing::instrument(level = "trace", err)]
-fn element(input: &str) -> IResult<&str, Node> {
+pub(super) fn document(input: &str) -> IResult<&str, Node> {
+    preceded(
+        opt(delimited(
+            tag_no_case("<!doctype"),
+            take_until(">"),
+            tag(">"),
+        )),
+        skip_ws(tag_children),
+    )(input)
+}
+
+#[tracing::instrument(level = "trace", err)]
+pub(super) fn element(input: &str) -> IResult<&str, Node> {
     alt((tag_children, tag_no_children, text))(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 fn text(input: &str) -> IResult<&str, Node> {
-    let (remaining, text) = take_till1(|c| c == '<')(input)?;
+    let (remaining, text) = take_until("<")(input)?;
     Ok((remaining, Node::from(text)))
 }
 
@@ -98,7 +110,7 @@ fn skip_non_space_ws<'a, T>(
 }
 
 fn skip_ws<'a, T>(
-    parser: impl FnMut(&str) -> IResult<&str, T>,
+    parser: impl FnMut(&'a str) -> IResult<&str, T>,
 ) -> impl FnMut(&'a str) -> IResult<&str, T> {
     delimited(opt(ws1), parser, opt(ws1))
 }
