@@ -3,10 +3,18 @@ use crate::style_tree::*;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Dimensions {
-    pub(crate) border_box: Rect,
-    pub(crate) padding: EdgeSizes,
-    pub(crate) border: Borders,
-    pub(crate) margin: EdgeSizes,
+    pub border_box: Rect,
+    pub padding: EdgeSizes,
+    pub border: Borders,
+    pub margin: EdgeSizes,
+}
+
+impl Dimensions {
+    pub fn from_width(width: i32) -> Self {
+        let mut d = Self::default();
+        d.border_box.width = width;
+        d
+    }
 }
 
 #[derive(Debug, Default, Copy, Clone)]

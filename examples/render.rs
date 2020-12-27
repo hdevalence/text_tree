@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::debug!("layout root: {:#?}", layout_root);
 
-    layout_root.layout(&Dimensions::default());
+    layout_root.layout(&Dimensions::from_width(80));
 
     // tracing::debug!("dims: {:#?}", layout_root.dimensions());
     text_tree::print_boxes(&layout_root);
