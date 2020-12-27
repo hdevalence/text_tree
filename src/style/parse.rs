@@ -106,6 +106,7 @@ fn display_kind(input: &str) -> IResult<&str, Value> {
             alt((
                 value(DisplayKind::Inline, tag("inline")),
                 value(DisplayKind::Block, tag("block")),
+                value(DisplayKind::None, tag("none")),
             )),
             Value::Display,
         ),
@@ -174,10 +175,7 @@ fn id(input: &str) -> IResult<&str, Selector> {
 fn identifier(input: &str) -> IResult<&str, &str> {
     context(
         "identifier",
-        recognize(pair(
-            alpha1,
-            many0(alt((alphanumeric1, tag("-")))),
-        )),
+        recognize(pair(alpha1, many0(alt((alphanumeric1, tag("-")))))),
     )(input)
 }
 

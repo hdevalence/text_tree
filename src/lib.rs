@@ -12,8 +12,18 @@ mod tests {
     use super::style::*;
     use super::style_tree::*;
 
+    fn trace_init() {
+        let _ = tracing_subscriber::fmt()
+            .with_test_writer()
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+            .with_max_level(tracing::Level::TRACE)
+            .try_init();
+    }
+
     #[test]
     fn build_and_style_and_layout_and_paint_dom() {
+        trace_init();
+
         let root = Node::new(
             vec![
                 Node::new(
@@ -102,7 +112,7 @@ mod tests {
                     }],
                     declarations: vec![Declaration {
                         name: "display".to_string(),
-                        value: Value::Keyword("block".to_string()),
+                        value: Value::Display(DisplayKind::Block),
                     }],
                 },
                 Rule {
@@ -142,7 +152,7 @@ mod tests {
                         },
                         Declaration {
                             name: "margin".to_string(),
-                            value: Value::Keyword("auto".to_string()),
+                            value: Value::Auto,
                         },
                     ],
                 },

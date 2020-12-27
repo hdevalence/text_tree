@@ -41,35 +41,15 @@ pub fn style_tree<'a>(root_node: &'a Node, style: &'a Stylesheet) -> StyledNode<
     }
 }
 
-pub enum Display {
-    None,
-    Inline,
-    Block,
-}
-
 impl<'a> StyledNode<'a> {
     pub fn node(&self) -> &'a Node {
         self.node
     }
 
-    pub fn display(&self) -> Display {
-        //println!("display value {:?}", self.value("display"));
+    pub fn display(&self) -> DisplayKind {
         match self.value("display") {
-            Some(Value::Keyword(s)) => match s.as_str() {
-                "block" => {
-                    //println!("found block");
-                    Display::Block
-                }
-                "none" => {
-                    //println!("found none");
-                    Display::None
-                }
-                _ => {
-                    //println!("setting inline");
-                    Display::Inline
-                }
-            },
-            _ => Display::Inline,
+            Some(Value::Display(d)) => d,
+            _ => DisplayKind::Inline,
         }
     }
 

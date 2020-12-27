@@ -35,6 +35,7 @@ pub enum Border {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DisplayKind {
+    None,
     Inline,
     Block,
 }
@@ -70,8 +71,8 @@ impl Value {
         match self {
             // XXX handle relative lengths?
             Value::AbsoluteLength(l) => *l,
-            _ => 0,
             Value::Border(b) => b.size(),
+            _ => 0,
         }
     }
 }
@@ -179,7 +180,7 @@ mod tests {
                     }],
                     declarations: vec![Declaration {
                         name: "display".to_string(),
-                        value: Value::Keyword("block".to_string()),
+                        value: Value::Display(DisplayKind::Block),
                     }],
                 },
                 Rule {
@@ -219,7 +220,7 @@ mod tests {
                         },
                         Declaration {
                             name: "margin".to_string(),
-                            value: Value::Keyword("auto".to_string()),
+                            value: Value::Auto,
                         },
                     ],
                 },
