@@ -332,8 +332,9 @@ impl<'a> LayoutBox<'a> {
 
         d.padding.top = style.lookup("padding-top", "padding", &zero).to_chars();
         d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_chars();
-        // Initialize the height with the size of the vertical padding.
-        d.border_box.height = d.padding.top + d.padding.bottom;
+        // Initialize the height with the size of the vertical padding and border.
+        d.border_box.height =
+            d.padding.top + d.padding.bottom + d.border.top.size() + d.border.bottom.size();
 
         d.border_box.x = containing_block.content_box().x + d.margin.left;
 

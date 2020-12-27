@@ -87,6 +87,10 @@ mod tests {
                             name: "margin".to_string(),
                             value: Value::AbsoluteLength(3),
                         },
+                        Declaration {
+                            name: "border".to_string(),
+                            value: Value::Border(Border::Double),
+                        },
                     ],
                 },
                 Rule {
