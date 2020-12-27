@@ -18,7 +18,7 @@ enum Kind {
         #[structopt(name = "file", parse(from_os_str))]
         file: PathBuf,
     },
-    Css {
+    Tss {
         #[structopt(name = "FILE", parse(from_os_str))]
         file: PathBuf,
     },
@@ -36,7 +36,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => eprintln!("parse error: {}", e),
             }
         }
-        Kind::Css { file: _ } => todo!("eliza needs to implement this!"),
+        Kind::Tss { file } => {
+            let s = std::fs::read_to_string(file)?;
+            match s.parse::<text_tree::style::Stylesheet>() {
+                Ok(style) => println!("{:#?}", style),
+                Err(e) => eprintln!("parse error: {}", e),
+            }
+        }
     }
     Ok(())
 }

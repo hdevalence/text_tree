@@ -84,7 +84,7 @@ fn unnamed_decl<'a>(input: &str) -> IResult<&str, Declaration> {
         "declaration",
         map(
             terminated(
-                pair(terminated(take_until(": "), tag(": ")), take_until(";")),
+                pair(terminated(identifier, tag(": ")), take_until(";")),
                 tag(";"),
             ),
             |(name, value)| Declaration {
@@ -176,7 +176,7 @@ fn identifier(input: &str) -> IResult<&str, &str> {
         "identifier",
         recognize(pair(
             alpha1,
-            many0(alt((alphanumeric1, tag("_"), tag(":"), tag(".")))),
+            many0(alt((alphanumeric1, tag("-")))),
         )),
     )(input)
 }
