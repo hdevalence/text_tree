@@ -5,3 +5,10 @@ authors = ["Henry de Valence <hdevalence@hdevalence.ca>"]
 edition = "2018"
 
 [dependencies]
+nom = "6"
+tracing = "0.1.22"
+regex = "1"
+
+[dev-dependencies]
+tracing-subscriber = "0.2"
+structopt = "0.3"
