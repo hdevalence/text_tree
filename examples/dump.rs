@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Kind::Html { file } => {
             let s = std::fs::read_to_string(file)?;
             match s.parse::<text_tree::content_tree::Node>() {
-                Ok(node) => println!("{:#?}", node),
+                Ok(node) => println!("{}", node),
                 Err(e) => eprintln!("parse error: {}", e),
             }
         }

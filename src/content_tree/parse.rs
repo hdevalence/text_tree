@@ -15,15 +15,35 @@ pub(super) fn document(input: &str) -> IResult<&str, Node> {
             take_until(">"),
             tag(">"),
         )),
-        skip_ws(context("root tag", tag_children)),
+        skip_ws(context("root tag", html_tag)),
     )(input)
 }
 
 #[tracing::instrument(level = "trace", err)]
 pub(super) fn element(input: &str) -> IResult<&str, Node> {
+    alt((html_tag, text))(input)
+}
+
+pub(super) fn html_tag(input: &str) -> IResult<&str, Node> {
     alt((
         context("tag with children", tag_children),
-        context("tag without children", tag_no_children),
+        self_closing_tag("area"),
+        self_closing_tag("base"),
+        self_closing_tag("br"),
+        self_closing_tag("col"),
+        self_closing_tag("embed"),
+        self_closing_tag("hr"),
+        self_closing_tag("img"),
+        self_closing_tag("input"),
+        self_closing_tag("link"),
+        self_closing_tag("meta"),
+        self_closing_tag("param"),
+        self_closing_tag("source"),
+        self_closing_tag("track"),
+        self_closing_tag("wbr"),
+        self_closing_tag("command"),
+        self_closing_tag("keygen"),
+        self_closing_tag("menuitem"),
         text,
     ))(input)
 }
@@ -32,7 +52,7 @@ pub(super) fn element(input: &str) -> IResult<&str, Node> {
 fn text(input: &str) -> IResult<&str, Node> {
     let (remaining, text) = context("text", preceded(not(tag("<")), take_until("<")))(input)?;
     let re = regex::Regex::new("\\s+").unwrap();
-    let text = re.replace_all(text, " ");
+    let text = re.replace_all(text.trim_matches('\n'), " ");
     Ok((remaining, Node::from(text)))
 }
 
@@ -79,7 +99,7 @@ fn attrs(input: &str) -> IResult<&str, ElementData> {
                 id = Some(val.to_string());
             }
             n if n.eq_ignore_ascii_case("style") => {
-                todo!("style attributes should probably 'work'...")
+                // ignore this lol
             }
             _ => {
                 // Skip other attributes for now...
@@ -97,6 +117,24 @@ fn open_tag(input: &str) -> IResult<&str, ElementData> {
         delimited(tag("<"), pair(identifier, attrs), tag(">"))(input)?;
     attrs.classes.insert(tag_name.to_string());
     Ok((remaining, attrs))
+}
+
+fn self_closing_tag<'a>(name: &'static str) -> impl FnMut(&'a str) -> IResult<&str, Node> {
+    context(name, move |input| {
+        let (remaining, mut attrs) = delimited(
+            tag("<"),
+            skip_ws(preceded(tag_no_case(name), attrs)),
+            preceded(opt(tag("/")), tag(">")),
+        )(input)?;
+        attrs.classes.insert(name.to_string());
+        Ok((
+            remaining,
+            Node {
+                children: Vec::new(),
+                node_data: NodeData::Element(attrs),
+            },
+        ))
+    })
 }
 
 fn close_tag<'a>(name: &'a str) -> impl FnMut(&'a str) -> IResult<&str, &str> {
@@ -141,23 +179,6 @@ fn comment(input: &str) -> IResult<&str, &str> {
 }
 
 #[tracing::instrument(level = "trace", err)]
-fn tag_no_children(input: &str) -> IResult<&str, Node> {
-    let (remaining, (tag_name, mut attrs)) = delimited(
-        tag("<"),
-        pair(identifier, attrs),
-        pair(multispace1, tag("/>")),
-    )(input)?;
-    attrs.classes.insert(tag_name.to_string());
-    Ok((
-        remaining,
-        Node {
-            children: Vec::new(),
-            node_data: NodeData::Element(attrs),
-        },
-    ))
-}
-
-#[tracing::instrument(level = "trace", err)]
 fn tag_children(input: &str) -> IResult<&str, Node> {
     let (remaining, (tag_name, mut attrs)) = context(
         "open tag",
@@ -171,7 +192,10 @@ fn tag_children(input: &str) -> IResult<&str, Node> {
     let (remaining, children) = terminated(
         // Only skip "non-space" whitespace here. Spaces may be part of a
         // text node.
-        context("children", many0(skip_non_space_ws(element))),
+        context(
+            "children",
+            preceded(opt(non_space_ws1), many0(skip_non_space_ws(element))),
+        ),
         context("close tag", close_tag(tag_name)),
     )(remaining)?;
     Ok((
@@ -364,7 +388,7 @@ mod tests {
             .map_err(|e| e.to_string())
             .expect("it should parse");
         let a = Node {
-            children: vec![Node::from("Hello world\n")],
+            children: vec![Node::from("Hello world")],
             node_data: NodeData::Element(ElementData {
                 classes: Some("a".to_string()).into_iter().collect(),
                 id: None,
@@ -374,20 +398,6 @@ mod tests {
         assert_eq!(parsed, a);
         assert_eq!(remaining, "");
     }
-
-    #[test]
-    fn text() {
-        trace_init();
-
-        let html = "Hello world!";
-        let (remaining, parsed) = dbg!(element(html))
-            .map_err(|e| e.to_string())
-            .expect("it should parse");
-
-        assert_eq!(parsed, Node::from("Hello world!"));
-        assert_eq!(remaining, "");
-    }
-
     #[test]
     fn simple_nested_text_1() {
         trace_init();

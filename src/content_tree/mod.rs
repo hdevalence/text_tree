@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt;
 pub mod parse;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -60,5 +61,30 @@ impl Node {
             NodeData::Text(ref s) => Some(s),
             NodeData::Element(_) => None,
         }
+    }
+}
+
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn fmt_at(node: &Node, f: &mut fmt::Formatter<'_>, i: usize) -> fmt::Result {
+            let indent = std::iter::repeat("  ").take(i).collect::<String>(); // todo(eliza): ew lol
+            match node.node_data {
+                NodeData::Text(ref t) => writeln!(f, "{}{:?}", indent, t)?,
+                NodeData::Element(ElementData {
+                    ref id,
+                    ref classes,
+                }) => {
+                    writeln!(f, "{}<tag id={:?} class={:?}>", indent, id, classes)?;
+
+                    for child in &node.children {
+                        fmt_at(child, f, i + 1)?;
+                    }
+
+                    writeln!(f, "{}</tag>", indent)?;
+                }
+            }
+            Ok(())
+        }
+        fmt_at(self, f, 0)
     }
 }
