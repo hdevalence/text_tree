@@ -46,7 +46,9 @@ impl<'a> StyledNode<'a> {
         self.node
     }
 
+    #[tracing::instrument]
     pub fn display(&self) -> DisplayKind {
+        tracing::info!(display = ?self.value("display"));
         match self.value("display") {
             Some(Value::Display(d)) => d,
             _ => DisplayKind::Inline,

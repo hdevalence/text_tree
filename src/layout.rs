@@ -162,11 +162,13 @@ impl<'a> LayoutBox<'a> {
         match self.box_type {
             BoxType::Anonymous => {
                 self.dimensions = containing_block.clone();
-                println!("anonymous layout {:?}", self.dimensions);
+                let span = tracing::info_span!("anonymous layout", ?self.dimensions);
+                let _e = span.enter();
+                tracing::info!("starting anonymous layout...");
                 self.layout_inline_children();
                 // fix this when doing text runs
                 self.dimensions.border_box.height = 1;
-                println!("finished anonymous layout");
+                tracing::info!("finished anonymous layout");
             }
             BoxType::InlineNode(_) => {
                 self.layout_inline(containing_block);
@@ -350,9 +352,10 @@ impl<'a> LayoutBox<'a> {
         let d = &mut self.dimensions;
         for child in &mut self.children {
             child.layout(d);
-            // Track the height so each child is laid out below the previous content.
-            println!("adding height {}", child.dimensions.margin_box().height);
-            d.border_box.height += child.dimensions.margin_box().height;
+            // Track the height so each child is laid out below the previous content
+            let height = child.dimensions.margin_box().height;
+            tracing::debug!(height, "adding");
+            d.border_box.height += height;
         }
     }
 
@@ -365,9 +368,15 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn layout_inline(&mut self, containing_block: &Dimensions) {
-        println!("layout inline {:?}", containing_block);
+        let span = tracing::info_span!("layout inline", ?containing_block);
+        let _e = span.enter();
+        tracing::debug!("calculating inline position...");
         self.calculate_inline_position(containing_block);
+
+        tracing::debug!("laying out inline children...");
         self.layout_inline_children();
+
+        tracing::debug!("calculating inline width...");
         self.calculate_inline_width(containing_block);
     }
 
@@ -393,7 +402,7 @@ impl<'a> LayoutBox<'a> {
         d.border_box.width = d.padding.left + d.padding.right;
         d.border_box.x = containing_block.content_box().x + d.margin.left;
         d.border_box.y = containing_block.content_box().y + containing_block.content_box().height;
-        println!("calculated inline position {:?}", d.border_box);
+        tracing::debug!(?d.border_box, "calculated inline position");
     }
 
     fn layout_inline_children(&mut self) {
@@ -403,7 +412,7 @@ impl<'a> LayoutBox<'a> {
             // Move to the left so that each child is laid out after
             // the previous children. TODO; line breaks.
             let child_width = child.dimensions.margin_box().width;
-            println!("laid out child, adding its width {}", child_width);
+            tracing::debug!(child.width = child_width, "laid out child, adding its width");
             left_space.border_box.x += child_width;
             self.dimensions.border_box.width += child_width;
         }
