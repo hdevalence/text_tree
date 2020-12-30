@@ -20,7 +20,11 @@ fn rule(input: &str) -> IResult<&str, Rule> {
         "rule",
         pair(
             any_selector,
-            delimited(tag(" {"), many0(skip_ws(any_decl)), tag("}")),
+            delimited(
+                preceded(char(' '), char('{')),
+                many0(skip_ws(any_decl)),
+                char('}'),
+            ),
         ),
     )(input)?;
 
@@ -70,7 +74,11 @@ fn named_decl<'a>(
     context(
         name,
         map(
-            delimited(preceded(tag(name), tag(": ")), value, tag(";")),
+            delimited(
+                preceded(tag(name), preceded(char(':'), char(' '))),
+                value,
+                char(';'),
+            ),
             move |value| Declaration {
                 name: String::from(name),
                 value,
@@ -84,8 +92,11 @@ fn unnamed_decl<'a>(input: &str) -> IResult<&str, Declaration> {
         "declaration",
         map(
             terminated(
-                pair(terminated(identifier, tag(": ")), take_until(";")),
-                tag(";"),
+                pair(
+                    terminated(identifier, preceded(char(':'), char(' '))),
+                    take_until(";"),
+                ),
+                char(';'),
             ),
             |(name, value)| Declaration {
                 value: Value::Keyword(String::from(value)),
@@ -154,7 +165,7 @@ fn any_selector(input: &str) -> IResult<&str, Selector> {
 fn class(input: &str) -> IResult<&str, Selector> {
     context(
         "class",
-        map(preceded(tag("."), identifier), |class| Selector {
+        map(preceded(char('.'), identifier), |class| Selector {
             id: None,
             classes: vec![String::from(class)],
         }),
@@ -164,7 +175,7 @@ fn class(input: &str) -> IResult<&str, Selector> {
 fn id(input: &str) -> IResult<&str, Selector> {
     context(
         "id",
-        map(preceded(tag("#"), identifier), |id| Selector {
+        map(preceded(char('#'), identifier), |id| Selector {
             id: Some(String::from(id)),
             classes: Vec::new(),
         }),
@@ -183,4 +194,20 @@ fn skip_ws<'a, T>(
     parser: impl FnMut(&'a str) -> IResult<&str, T>,
 ) -> impl FnMut(&'a str) -> IResult<&str, T> {
     delimited(multispace0, parser, multispace0)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // This is primarily a demo for testng parse error formatting. Run it with
+    // `cargo test -- nice_parse_errors --show-output`.
+    #[test]
+    fn nice_parse_errors() {
+        use nom::Finish;
+
+        let tss = r#".x { y }"#;
+        let err = dbg!(stylesheet(tss)).finish().expect_err("shouldn't parse");
+        println!("nice parse error: {}", nom::error::convert_error(tss, err))
+    }
 }
